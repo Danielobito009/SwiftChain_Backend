@@ -68,9 +68,7 @@ export class LocationService {
     // ── 1. Validate ──────────────────────────────────────────────────────────
     const validationError = this.validatePayload(payload, driverId);
     if (validationError) {
-      logger.warn(
-        `[Location] Invalid payload from driverId=${driverId}: ${validationError}`,
-      );
+      logger.warn(`[Location] Invalid payload from driverId=${driverId}: ${validationError}`);
       return { success: false, error: validationError };
     }
 
@@ -133,10 +131,7 @@ export class LocationService {
    *
    * @returns An error string if invalid, or null if valid.
    */
-  private validatePayload(
-    payload: DriverLocationUpdatePayload,
-    driverId: string,
-  ): string | null {
+  private validatePayload(payload: DriverLocationUpdatePayload, driverId: string): string | null {
     if (!Types.ObjectId.isValid(driverId)) {
       return `Invalid driverId: ${driverId}`;
     }

@@ -1,8 +1,9 @@
 import request from 'supertest';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import app from '../src/app';
+
 import User from '../src/models/User';
+import { IUser } from '../src/interfaces/IUser';
 
 // Mock the database connection to prevent the app from connecting to the real DB
 import type { Express } from 'express';
@@ -21,17 +22,6 @@ jest.mock('../src/config/logger', () => ({
   debug: jest.fn(),
 }));
 
-let mongoServer: MongoMemoryServer;
-
-beforeAll(async () => {
-  // Set JWT_SECRET for tests
-  process.env.JWT_SECRET = 'test-jwt-secret-key-for-testing';
-  process.env.JWT_EXPIRES_IN = '1h';
-  process.env.BCRYPT_ROUNDS = '4'; // Lower rounds for faster tests
-
-  mongoServer = await MongoMemoryServer.create();
-  const mongoUri = mongoServer.getUri();
-  await mongoose.connect(mongoUri);
 let app: Express;
 let mongoServer: MongoMemoryServer;
 
@@ -61,7 +51,7 @@ afterEach(async () => {
  * This goes through the Mongoose model (including the pre-save hash hook)
  * so the password is properly hashed.
  */
-const createTestUser = async (overrides = {}): Promise<any> => {
+const createTestUser = async (overrides: Record<string, unknown> = {}): Promise<IUser> => {
   const defaultUser = {
     email: 'testuser@swiftchain.com',
     password: 'SecurePass123!',
@@ -254,8 +244,12 @@ describe('POST /api/v1/auth/login', () => {
 
       expect(res.status).toBe(404);
     });
+  });
+});
+
 const validUser = {
-  name: 'Ada Lovelace',
+  firstName: 'Ada',
+  lastName: 'Lovelace',
   email: 'ada@example.com',
   password: 'sup3rSecret!',
 };
@@ -267,7 +261,8 @@ describe('POST /api/v1/auth/register', () => {
     expect(res.status).toBe(201);
     expect(res.body).toHaveProperty('status', 'success');
     expect(res.body.data.user).toMatchObject({
-      name: validUser.name,
+      firstName: validUser.firstName,
+      lastName: validUser.lastName,
       email: validUser.email,
       role: 'user',
     });
@@ -313,10 +308,10 @@ describe('POST /api/v1/auth/register', () => {
     expect(res.status).toBe(400);
   });
 
-  it('rejects a missing name with 400', async () => {
+  it('rejects a missing firstName with 400', async () => {
     const res = await request(app)
       .post('/api/v1/auth/register')
-      .send({ email: validUser.email, password: validUser.password });
+      .send({ lastName: validUser.lastName, email: validUser.email, password: validUser.password });
 
     expect(res.status).toBe(400);
   });

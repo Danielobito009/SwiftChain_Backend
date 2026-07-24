@@ -2,27 +2,28 @@ import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import routes from './routes';
-import logger from './config/logger';
-
-dotenv.config();
-
-const app = express();
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/swiftchain';
 import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
+
+import routes from './routes';
+import logger from './config/logger';
 import { connectDatabase } from './config/database';
 import errorHandler from './middleware/errorHandler';
 import requestLogger from './middleware/requestLogger';
-import routes from './routes';
 import env from './config/env';
+
+dotenv.config();
 
 const app = express();
 
 // Trust the first proxy (load balancer / reverse proxy) so that
 // secure headers and rate limiting use the correct client IP.
 app.set('trust proxy', 1);
+
+app.use(helmet());
+app.use(compression());
+app.use(requestLogger);
 
 // CORS configuration
 app.use(
@@ -45,20 +46,19 @@ app.use('/api', limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-app.use(cors());
-app.use(express.json());
-
 app.use('/api', routes);
 
-app.get('/health', (req, res) => {
+app.get('/health', (req, res): void => {
   res.status(200).json({
-    status: 'healthy',
+    status: 'success',
+    message: 'SwiftChain-Backend is running',
     timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
     mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
   });
 });
 
-app.use((req, res) => {
+app.use((req, res): void => {
   res.status(404).json({
     success: false,
     error: `Route ${req.path} not found`,
@@ -66,9 +66,9 @@ app.use((req, res) => {
 });
 
 // Connect to MongoDB but don't start the server here
-const connectDB = async () => {
+const connectDB = async (): Promise<void> => {
   try {
-    await mongoose.connect(MONGODB_URI);
+    await connectDatabase();
     logger.info('✅ Connected to MongoDB');
   } catch (error) {
     logger.error('❌ Failed to connect to MongoDB:', error);
@@ -77,6 +77,10 @@ const connectDB = async () => {
 };
 
 // Call connectDB but don't listen
-connectDB();
+if (process.env.NODE_ENV !== 'test' && !process.env.JEST_WORKER_ID) {
+  connectDB();
+}
+
+app.use(errorHandler);
 
 export default app;

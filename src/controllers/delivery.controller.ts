@@ -51,8 +51,11 @@ export class DeliveryController {
   async list(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const statusParam = req.query.status as string | undefined;
-      const validatedStatus = Object.values(DeliveryStatus).includes(statusParam as DeliveryStatus)
-        ? (statusParam as DeliveryStatus)
+      const statusNormalized = statusParam ? statusParam.toLowerCase() : undefined;
+      const validatedStatus = Object.values(DeliveryStatus).includes(
+        statusNormalized as DeliveryStatus,
+      )
+        ? (statusNormalized as DeliveryStatus)
         : undefined;
 
       const filters: DeliveryFilter = {

@@ -11,11 +11,14 @@ class SocketService {
       .exec() as unknown as IChatMessage[];
   }
 
-  public async saveMessage(payload: { content: string; sender?: string }) {
-    return ChatMessage.create({ content: payload.content, sender: payload.sender });
+  public async saveMessage(payload: { content: string; sender?: string }): Promise<IChatMessage> {
+    return ChatMessage.create({
+      content: payload.content,
+      sender: payload.sender,
+    }) as unknown as IChatMessage;
   }
 
-  public async handleConnection(socket: Socket, nsp: Namespace): Promise<void> {
+  public async handleConnection(socket: Socket, _nsp: Namespace): Promise<void> {
     try {
       const recent = await this.getRecentMessages();
       socket.emit('recentMessages', recent.reverse());

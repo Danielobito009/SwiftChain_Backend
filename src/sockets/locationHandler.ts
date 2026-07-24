@@ -34,61 +34,51 @@ type TypedServer = SocketIOServer<
  * @param io     - The Socket.IO server instance (needed by the service to broadcast).
  * @param socket - The connected socket to register handlers on.
  */
-export function registerLocationHandler(
-  io: TypedServer,
-  socket: TypedSocket,
-): void {
+export function registerLocationHandler(io: TypedServer, socket: TypedSocket): void {
   // ── driver_location_update ───────────────────────────────────────────────
-  socket.on(
-    'driver_location_update',
-    async (payload: DriverLocationUpdatePayload) => {
-      const driverId = socket.data.userId;
+  socket.on('driver_location_update', async (payload: DriverLocationUpdatePayload) => {
+    const driverId = socket.data.userId;
 
-      // Auth guard
-      if (!driverId) {
-        logger.warn(
-          `[LocationHandler] Unauthenticated driver_location_update — ` +
-            `socketId=${socket.id}`,
-        );
-        socket.emit('location_update_ack', {
-          success: false,
-          error: 'Authentication required',
-        });
-        return;
-      }
-
-      // Payload guard
-      if (!payload || typeof payload !== 'object') {
-        logger.warn(
-          `[LocationHandler] Malformed payload from driverId=${driverId} ` +
-            `socketId=${socket.id}`,
-        );
-        socket.emit('location_update_ack', {
-          success: false,
-          error: 'Malformed payload',
-        });
-        return;
-      }
-
-      logger.debug(
-        `[LocationHandler] driver_location_update — driverId=${driverId} ` +
-          `deliveryId=${payload.deliveryId} socketId=${socket.id}`,
+    // Auth guard
+    if (!driverId) {
+      logger.warn(
+        `[LocationHandler] Unauthenticated driver_location_update — ` + `socketId=${socket.id}`,
       );
+      socket.emit('location_update_ack', {
+        success: false,
+        error: 'Authentication required',
+      });
+      return;
+    }
 
-      try {
-        const ack = await locationService.processLiveUpdate(io, driverId, payload);
-        socket.emit('location_update_ack', ack);
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : 'Unexpected error';
-        logger.error(
-          `[LocationHandler] Unexpected error — driverId=${driverId}: ${message}`,
-          { stack: err instanceof Error ? err.stack : undefined },
-        );
-        socket.emit('location_update_ack', { success: false, error: message });
-      }
-    },
-  );
+    // Payload guard
+    if (!payload || typeof payload !== 'object') {
+      logger.warn(
+        `[LocationHandler] Malformed payload from driverId=${driverId} ` + `socketId=${socket.id}`,
+      );
+      socket.emit('location_update_ack', {
+        success: false,
+        error: 'Malformed payload',
+      });
+      return;
+    }
+
+    logger.debug(
+      `[LocationHandler] driver_location_update — driverId=${driverId} ` +
+        `deliveryId=${payload.deliveryId} socketId=${socket.id}`,
+    );
+
+    try {
+      const ack = await locationService.processLiveUpdate(io, driverId, payload);
+      socket.emit('location_update_ack', ack);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unexpected error';
+      logger.error(`[LocationHandler] Unexpected error — driverId=${driverId}: ${message}`, {
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      socket.emit('location_update_ack', { success: false, error: message });
+    }
+  });
 
   // ── subscribe_delivery ───────────────────────────────────────────────────
   // Allows any client (dispatcher, customer) to subscribe to a delivery room
@@ -99,9 +89,7 @@ export function registerLocationHandler(
     if (room.startsWith('delivery:')) {
       const deliveryId = room.replace('delivery:', '');
       if (!deliveryId) {
-        logger.warn(
-          `[LocationHandler] Empty deliveryId in join_room — socketId=${socket.id}`,
-        );
+        logger.warn(`[LocationHandler] Empty deliveryId in join_room — socketId=${socket.id}`);
         return;
       }
       logger.info(

@@ -61,9 +61,7 @@ export class SorobanService {
    * @returns A `ConnectivityCheckResult` on success, or a
    *          `ConnectivityCheckError` on failure.
    */
-  public async checkConnectivity(): Promise<
-    ConnectivityCheckResult | ConnectivityCheckError
-  > {
+  public async checkConnectivity(): Promise<ConnectivityCheckResult | ConnectivityCheckError> {
     const checkedAt = new Date().toISOString();
     const start = Date.now();
 

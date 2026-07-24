@@ -35,6 +35,7 @@ class RoutingService {
     this.baseUrl = 'https://maps.googleapis.com/maps/api/directions/json';
 
     if (!this.apiKey) {
+      // eslint-disable-next-line no-console
       console.warn('⚠️ Google Maps API key not configured. Using fallback calculation.');
     }
   }
@@ -46,6 +47,7 @@ class RoutingService {
       }
       return this.calculateWithHaversine(request);
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to calculate ETA:', error);
       throw new Error('Failed to calculate delivery ETA');
     }

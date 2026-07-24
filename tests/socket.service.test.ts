@@ -44,7 +44,9 @@ function makeMockSocket(id: string): jest.Mocked<TypedSocket> {
  * Build a minimal mock Socket.IO server whose `sockets.sockets` map mirrors
  * whatever we put in it.
  */
-function makeMockIO(socketMap: Map<string, jest.Mocked<TypedSocket>>) {
+function makeMockIO(
+  socketMap: Map<string, jest.Mocked<TypedSocket>>,
+): Parameters<SocketService['runHealthCheckTick']>[0] {
   return {
     sockets: {
       sockets: socketMap,
@@ -139,9 +141,7 @@ describe('SocketService', () => {
     it('warns and does not throw for unknown socket', () => {
       const unknownSocket = makeMockSocket('ghost-socket');
       // Not registered — should not throw
-      expect(() =>
-        service.handlePong(unknownSocket, { timestamp: Date.now() }),
-      ).not.toThrow();
+      expect(() => service.handlePong(unknownSocket, { timestamp: Date.now() })).not.toThrow();
     });
   });
 
@@ -222,8 +222,14 @@ describe('SocketService', () => {
 
       service.runHealthCheckTick(io);
 
-      expect(s1.emit).toHaveBeenCalledWith('ping', expect.objectContaining({ timestamp: expect.any(Number) }));
-      expect(s2.emit).toHaveBeenCalledWith('ping', expect.objectContaining({ timestamp: expect.any(Number) }));
+      expect(s1.emit).toHaveBeenCalledWith(
+        'ping',
+        expect.objectContaining({ timestamp: expect.any(Number) }),
+      );
+      expect(s2.emit).toHaveBeenCalledWith(
+        'ping',
+        expect.objectContaining({ timestamp: expect.any(Number) }),
+      );
     });
 
     it('increments missedPongs each tick when no pong is received', () => {

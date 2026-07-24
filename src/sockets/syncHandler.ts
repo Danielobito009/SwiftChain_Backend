@@ -20,9 +20,7 @@ export function registerSyncHandler(socket: TypedSocket): void {
 
     // ── Auth guard ─────────────────────────────────────────────────────────
     if (!driverId) {
-      logger.warn(
-        `[SyncHandler] Unauthenticated location_sync attempt — socketId=${socket.id}`,
-      );
+      logger.warn(`[SyncHandler] Unauthenticated location_sync attempt — socketId=${socket.id}`);
       socket.emit('location_sync_ack', {
         processedAt: new Date().toISOString(),
         received: 0,
@@ -68,10 +66,9 @@ export function registerSyncHandler(socket: TypedSocket): void {
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unexpected error during sync';
-      logger.error(
-        `[SyncHandler] Error processing sync for driverId=${driverId}: ${message}`,
-        { stack: err instanceof Error ? err.stack : undefined },
-      );
+      logger.error(`[SyncHandler] Error processing sync for driverId=${driverId}: ${message}`, {
+        stack: err instanceof Error ? err.stack : undefined,
+      });
 
       // Emit a failed ack so the client knows to retry
       socket.emit('location_sync_ack', {

@@ -2,7 +2,7 @@ import request from 'supertest';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import app from '../src/app';
-import Delivery from '../src/models/Delivery';
+import { Delivery } from '../src/models/Delivery';
 
 jest.mock('../src/config/database', () => ({
   connectDatabase: jest.fn(),
@@ -125,14 +125,14 @@ describe('Delivery API — GET /api/v1/deliveries', () => {
     await Delivery.create({
       ...mockDeliveryInput,
       trackingNumber: 'SWIFT-002',
-      status: 'Assigned',
+      status: 'assigned',
     });
 
-    const res = await request(app).get('/api/v1/deliveries?status=Pending');
+    const res = await request(app).get('/api/v1/deliveries?status=pending');
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
-    expect(res.body.data[0].status).toBe('Pending');
+    expect(res.body.data[0].status).toBe('pending');
   });
 
   it('should search by tracking number', async () => {
@@ -186,11 +186,11 @@ describe('Delivery API — PATCH /api/v1/deliveries/:id', () => {
     const created = await Delivery.create(mockDeliveryInput);
     const res = await request(app)
       .patch(`/api/v1/deliveries/${created._id}`)
-      .send({ notes: 'Updated notes', status: 'Assigned' });
+      .send({ notes: 'Updated notes', status: 'assigned' });
 
     expect(res.status).toBe(200);
     expect(res.body.data.notes).toBe('Updated notes');
-    expect(res.body.data.status).toBe('Assigned');
+    expect(res.body.data.status).toBe('assigned');
   });
 });
 

@@ -16,7 +16,11 @@
 
 import mongoose, { Types } from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { LocationService, deliveryRoom, DELIVERY_ROOM_PREFIX } from '../src/sockets/location.service';
+import {
+  LocationService,
+  deliveryRoom,
+  DELIVERY_ROOM_PREFIX,
+} from '../src/sockets/location.service';
 import { LocationUpdate } from '../src/models/LocationUpdate';
 import {
   DriverLocationUpdatePayload,
@@ -237,11 +241,7 @@ describe('LocationService', () => {
 
     it('rejects lat out of range (>90)', async () => {
       const { io } = makeMockIO();
-      const ack = await service.processLiveUpdate(
-        io,
-        validDriverId,
-        makePayload({ lat: 91 }),
-      );
+      const ack = await service.processLiveUpdate(io, validDriverId, makePayload({ lat: 91 }));
 
       expect(ack.success).toBe(false);
       expect(ack.error).toContain('lat');
@@ -249,11 +249,7 @@ describe('LocationService', () => {
 
     it('rejects lng out of range (<-180)', async () => {
       const { io } = makeMockIO();
-      const ack = await service.processLiveUpdate(
-        io,
-        validDriverId,
-        makePayload({ lng: -181 }),
-      );
+      const ack = await service.processLiveUpdate(io, validDriverId, makePayload({ lng: -181 }));
 
       expect(ack.success).toBe(false);
       expect(ack.error).toContain('lng');
@@ -261,11 +257,7 @@ describe('LocationService', () => {
 
     it('rejects NaN lat', async () => {
       const { io } = makeMockIO();
-      const ack = await service.processLiveUpdate(
-        io,
-        validDriverId,
-        makePayload({ lat: NaN }),
-      );
+      const ack = await service.processLiveUpdate(io, validDriverId, makePayload({ lat: NaN }));
 
       expect(ack.success).toBe(false);
     });

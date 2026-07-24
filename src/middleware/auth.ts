@@ -29,7 +29,7 @@ export const authenticate = (
     const payload = jwt.verify(token, jwtSecret);
 
     if (typeof payload === 'string') {
-      next(new HttpError(401, 'Invalid authorization token')); 
+      next(new HttpError(401, 'Invalid authorization token'));
       return;
     }
 

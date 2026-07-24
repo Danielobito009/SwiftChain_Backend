@@ -21,11 +21,12 @@ class DeliveryController {
         data: result,
         message: 'ETA calculated successfully',
       });
-    } catch (error: any) {
-      const statusCode = error.message?.includes('not found') ? 404 : 500;
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const statusCode = errorMessage.includes('not found') ? 404 : 500;
       res.status(statusCode).json({
         success: false,
-        error: error.message || 'Failed to calculate ETA',
+        error: errorMessage || 'Failed to calculate ETA',
       });
     }
   }

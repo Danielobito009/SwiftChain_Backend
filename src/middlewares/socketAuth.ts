@@ -1,26 +1,23 @@
-import { Socket, Namespace } from 'socket.io';
+import { Socket } from 'socket.io';
 import authService from '../services/authService';
 import logger from '../config/logger';
 
 export interface AuthenticatedSocket extends Socket {
-  data: { user?: any };
+  data: { user?: unknown };
 }
 
 /**
  * Socket.io middleware to authenticate connections using JWT.
  * Expects token to be provided in `socket.handshake.auth.token` or `socket.handshake.query.token`.
  */
-const socketAuth = async (socket: Socket, next: (err?: any) => void) => {
+const socketAuth = async (socket: Socket, next: (err?: Error) => void): Promise<void> => {
   try {
+    const handshake = socket.handshake as { auth?: { token?: string }; query?: { token?: string } };
     const token =
       // prefer auth payload
-      (socket.handshake &&
-        (socket.handshake as any).auth &&
-        (socket.handshake as any).auth.token) ||
+      (handshake.auth && handshake.auth.token) ||
       // fallback to query string
-      (socket.handshake &&
-        (socket.handshake as any).query &&
-        (socket.handshake as any).query.token);
+      (handshake.query && handshake.query.token);
 
     if (!token) {
       logger.warn('Socket auth failed: missing token');
@@ -35,7 +32,7 @@ const socketAuth = async (socket: Socket, next: (err?: any) => void) => {
     }
 
     // Attach user to socket data for downstream handlers
-    (socket as AuthenticatedSocket).data = { ...(socket as any).data, user };
+    (socket as AuthenticatedSocket).data = { ...socket.data, user };
 
     return next();
   } catch (err) {

@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { StatusCodes } from 'http-status-codes';
 import User from '../models/User';
-import { IAuthResponse, ILoginPayload } from '../interfaces/IUser';
+import { IAuthResponse, ILoginPayload, IUser } from '../interfaces/IUser';
 import AppError from '../utils/AppError';
 import logger from '../config/logger';
 
@@ -75,23 +75,46 @@ class AuthService {
     return jwt.sign({ userId, role }, secret, {
       expiresIn,
     });
-import logger from '../config/logger';
-import User, { IUser } from '../models/User';
+  }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change_me_in_prod';
-
-class AuthService {
   public verifyToken(token: string): { userId: string } {
+    const JWT_SECRET = process.env.JWT_SECRET || 'change_me_in_prod';
     try {
-      const decoded = jwt.verify(token, JWT_SECRET) as { sub?: string } | null;
+      const decoded = jwt.verify(token, JWT_SECRET) as {
+        sub?: string;
+        id?: string;
+        _id?: string;
+      } | null;
       if (!decoded) throw new Error('Invalid token');
-      const userId = (decoded as any).sub || (decoded as any).id || (decoded as any)._id;
+      const userId = decoded.sub || decoded.id || decoded._id;
       if (!userId) throw new Error('Token missing subject');
       return { userId };
     } catch (error) {
       logger.warn('JWT verification failed', error);
       throw error;
     }
+  }
+
+  public async registerUser(payload: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    password: string;
+  }): Promise<Partial<IUser>> {
+    const existingUser = await User.findOne({ email: payload.email });
+    if (existingUser) {
+      throw new AppError('Email is already in use', StatusCodes.CONFLICT);
+    }
+
+    const user = await User.create(payload);
+
+    return {
+      id: user.id as string,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role,
+    } as unknown as Partial<IUser>;
   }
 
   public async getUserById(id: string): Promise<IUser | null> {

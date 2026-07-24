@@ -62,9 +62,7 @@ export class SyncService {
       );
     }
 
-    logger.info(
-      `[Sync] Processing batch — driverId=${driverId} count=${updates.length}`,
-    );
+    logger.info(`[Sync] Processing batch — driverId=${driverId} count=${updates.length}`);
 
     // ── 3. Per-item validation ────────────────────────────────────────────────
     const results: SyncItemResult[] = [];
@@ -98,9 +96,7 @@ export class SyncService {
       { capturedAt: 1 },
     ).lean<Pick<ILocationUpdate, 'capturedAt'>[]>();
 
-    const existingSet = new Set<number>(
-      existingDocs.map((d) => new Date(d.capturedAt).getTime()),
-    );
+    const existingSet = new Set<number>(existingDocs.map((d) => new Date(d.capturedAt).getTime()));
 
     // ── 5. Build insertable documents, deduplicating within batch ─────────────
     const seenInBatch = new Set<number>();
@@ -118,9 +114,7 @@ export class SyncService {
 
       toInsert.push({
         driverId: driverObjectId,
-        deliveryId: point.deliveryId
-          ? new Types.ObjectId(point.deliveryId)
-          : undefined,
+        deliveryId: point.deliveryId ? new Types.ObjectId(point.deliveryId) : undefined,
         coordinates: { lat: point.lat, lng: point.lng },
         capturedAt: new Date(ts),
         isOfflineSync: true,
@@ -140,9 +134,7 @@ export class SyncService {
           });
         }
 
-        logger.info(
-          `[Sync] Persisted ${toInsert.length} location updates — driverId=${driverId}`,
-        );
+        logger.info(`[Sync] Persisted ${toInsert.length} location updates — driverId=${driverId}`);
       } catch (err) {
         // insertMany with ordered:false may partially succeed.
         // Mark all pending-insert items as failed.
@@ -171,7 +163,11 @@ export class SyncService {
    * @returns       An error string if invalid, or null if valid.
    */
   private validatePoint(point: OfflineLocationPoint): string | null {
-    if (typeof point.capturedAt !== 'number' || !Number.isFinite(point.capturedAt) || point.capturedAt <= 0) {
+    if (
+      typeof point.capturedAt !== 'number' ||
+      !Number.isFinite(point.capturedAt) ||
+      point.capturedAt <= 0
+    ) {
       return 'capturedAt must be a positive finite number (ms epoch)';
     }
 

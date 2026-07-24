@@ -50,14 +50,12 @@ function resolveStellarConfig(): StellarConfig {
     );
   }
 
-  const rpcUrl =
-    process.env.SOROBAN_RPC_URL?.trim() || DEFAULT_RPC_URLS[network];
+  const rpcUrl = process.env.SOROBAN_RPC_URL?.trim() || DEFAULT_RPC_URLS[network];
 
   // Prefer explicit passphrase env var; fall back to the well-known value for
   // the configured network.
   const networkPassphrase =
-    process.env.STELLAR_NETWORK_PASSPHRASE?.trim() ||
-    NETWORK_PASSPHRASES[network];
+    process.env.STELLAR_NETWORK_PASSPHRASE?.trim() || NETWORK_PASSPHRASES[network];
 
   const timeoutMs = parseInt(process.env.SOROBAN_RPC_TIMEOUT_MS ?? '10000', 10);
 

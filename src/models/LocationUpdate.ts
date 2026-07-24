@@ -137,7 +137,4 @@ LocationUpdateSchema.index({ deliveryId: 1, capturedAt: 1 });
 
 // ─── Model ────────────────────────────────────────────────────────────────────
 
-export const LocationUpdate = model<ILocationUpdate>(
-  'LocationUpdate',
-  LocationUpdateSchema,
-);
+export const LocationUpdate = model<ILocationUpdate>('LocationUpdate', LocationUpdateSchema);

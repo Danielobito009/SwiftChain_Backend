@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { suspendUser as suspendUserService } from '../services/adminService';
+import type { IUser } from '../interfaces/IUser';
 import AppError from '../utils/AppError';
 
 // ─── Request body type ─────────────────────────────────────────────────────────
@@ -31,12 +32,10 @@ export const suspendUser = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    // req.user is guaranteed by the authenticate middleware
-    if (!req.user) {
-      throw new AppError(
-        'Authentication required.',
-        StatusCodes.UNAUTHORIZED,
-      );
+    const adminUser = (req as Request & { user?: IUser }).user;
+
+    if (!adminUser) {
+      throw new AppError('Authentication required.', StatusCodes.UNAUTHORIZED);
     }
 
     const { id: targetUserId } = req.params;
@@ -44,22 +43,16 @@ export const suspendUser = async (
 
     // Input validation
     if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
-      throw new AppError(
-        'A reason is required to suspend or ban a user.',
-        StatusCodes.BAD_REQUEST,
-      );
+      throw new AppError('A reason is required to suspend or ban a user.', StatusCodes.BAD_REQUEST);
     }
 
     if (ban !== undefined && typeof ban !== 'boolean') {
-      throw new AppError(
-        '"ban" must be a boolean value.',
-        StatusCodes.BAD_REQUEST,
-      );
+      throw new AppError('"ban" must be a boolean value.', StatusCodes.BAD_REQUEST);
     }
 
     const { user, action } = await suspendUserService({
       targetUserId,
-      adminId: req.user._id.toString(),
+      adminId: adminUser._id.toString(),
       reason: reason.trim(),
       ban: ban === true,
     });

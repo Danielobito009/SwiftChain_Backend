@@ -246,10 +246,10 @@ describe('SyncService', () => {
     it('handles a mixed batch of valid and invalid points', async () => {
       const base = Date.now() - 20_000;
       const points: OfflineLocationPoint[] = [
-        makePoint({ capturedAt: base }),          // valid
-        makePoint({ capturedAt: 0 }),              // invalid — zero timestamp
-        makePoint({ capturedAt: base + 1000 }),    // valid
-        makePoint({ lat: 999 }),                   // invalid — lat OOB
+        makePoint({ capturedAt: base }), // valid
+        makePoint({ capturedAt: 0 }), // invalid — zero timestamp
+        makePoint({ capturedAt: base + 1000 }), // valid
+        makePoint({ lat: 999 }), // invalid — lat OOB
       ];
 
       const ack = await service.processBatch(validDriverId, makePayload(points));
@@ -319,9 +319,9 @@ describe('SyncService', () => {
       await service.processBatch(validDriverId, makePayload([makePoint({ capturedAt: ts })]));
 
       const points: OfflineLocationPoint[] = [
-        makePoint({ capturedAt: ts }),          // duplicate
-        makePoint({ capturedAt: ts + 1000 }),   // new valid
-        makePoint({ capturedAt: 0 }),            // invalid
+        makePoint({ capturedAt: ts }), // duplicate
+        makePoint({ capturedAt: ts + 1000 }), // new valid
+        makePoint({ capturedAt: 0 }), // invalid
       ];
 
       const ack = await service.processBatch(validDriverId, makePayload(points));

@@ -154,12 +154,7 @@ export class SocketService {
    * @param io - The Socket.IO server instance.
    */
   public startHealthChecks(
-    io: SocketIOServer<
-      ClientToServerEvents,
-      ServerToClientEvents,
-      InterServerEvents,
-      SocketData
-    >,
+    io: SocketIOServer<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>,
   ): void {
     if (this.healthCheckInterval) {
       logger.warn('[Socket] Health-check loop is already running');
@@ -195,12 +190,7 @@ export class SocketService {
    * @returns  A summary of the tick results.
    */
   public runHealthCheckTick(
-    io: SocketIOServer<
-      ClientToServerEvents,
-      ServerToClientEvents,
-      InterServerEvents,
-      SocketData
-    >,
+    io: SocketIOServer<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>,
   ): HealthCheckResult {
     const checkedAt = new Date().toISOString();
     let staleConnectionsEvicted = 0;

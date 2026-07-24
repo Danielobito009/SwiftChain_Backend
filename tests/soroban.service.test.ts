@@ -39,14 +39,18 @@ jest.mock('../src/config/stellar', () => ({
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Build a minimal mock of rpc.Server with controllable method responses. */
-function makeMockClient(overrides: Partial<{
-  getHealth: () => Promise<StellarRpc.Api.GetHealthResponse>;
-  getLatestLedger: () => Promise<StellarRpc.Api.GetLatestLedgerResponse>;
-  getNetwork: () => Promise<StellarRpc.Api.GetNetworkResponse>;
-}> = {}): StellarRpc.Server {
+function makeMockClient(
+  overrides: Partial<{
+    getHealth: () => Promise<StellarRpc.Api.GetHealthResponse>;
+    getLatestLedger: () => Promise<StellarRpc.Api.GetLatestLedgerResponse>;
+    getNetwork: () => Promise<StellarRpc.Api.GetNetworkResponse>;
+  }> = {},
+): StellarRpc.Server {
   return {
     getHealth: jest.fn().mockResolvedValue({ status: 'healthy' }),
-    getLatestLedger: jest.fn().mockResolvedValue({ sequence: 12345678, id: 'abc', protocolVersion: 21 }),
+    getLatestLedger: jest
+      .fn()
+      .mockResolvedValue({ sequence: 12345678, id: 'abc', protocolVersion: 21 }),
     getNetwork: jest.fn().mockResolvedValue({
       passphrase: 'Test SDF Network ; September 2015',
       protocolVersion: 21,

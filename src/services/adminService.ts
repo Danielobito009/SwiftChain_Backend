@@ -1,6 +1,7 @@
 import { StatusCodes } from 'http-status-codes';
 import mongoose from 'mongoose';
-import User, { IUser, UserRole, UserStatus } from '../models/User';
+import User from '../models/User';
+import { IUser, UserRole, UserStatus } from '../interfaces/IUser';
 import AppError from '../utils/AppError';
 import logger from '../config/logger';
 
@@ -71,10 +72,7 @@ export const suspendUser = async (input: SuspendUserInput): Promise<SuspendUserR
 
   // 5. Idempotency — already in the desired state
   if (targetUser.status === desiredStatus) {
-    throw new AppError(
-      `User is already ${desiredStatus}.`,
-      StatusCodes.CONFLICT,
-    );
+    throw new AppError(`User is already ${desiredStatus}.`, StatusCodes.CONFLICT);
   }
 
   // 6. Apply the status change with audit metadata
@@ -84,9 +82,7 @@ export const suspendUser = async (input: SuspendUserInput): Promise<SuspendUserR
 
   await targetUser.save();
 
-  logger.info(
-    `Admin ${adminId} ${desiredStatus} user ${targetUserId}. Reason: "${reason}"`,
-  );
+  logger.info(`Admin ${adminId} ${desiredStatus} user ${targetUserId}. Reason: "${reason}"`);
 
   return { user: targetUser, action: desiredStatus };
 };

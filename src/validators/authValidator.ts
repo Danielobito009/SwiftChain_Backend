@@ -13,7 +13,8 @@ const MIN_PASSWORD_LENGTH = 8;
 const MIN_NAME_LENGTH = 2;
 
 export interface RegisterInput {
-  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   password: string;
 }
@@ -31,11 +32,17 @@ export const validateRegisterInput = (body: unknown): RegisterInput => {
     throw ApiError.badRequest('Request body must be a JSON object');
   }
 
-  const { name, email, password } = body as Record<string, unknown>;
+  const { firstName, lastName, email, password } = body as Record<string, unknown>;
 
-  if (!isNonEmptyString(name) || name.trim().length < MIN_NAME_LENGTH) {
+  if (!isNonEmptyString(firstName) || firstName.trim().length < MIN_NAME_LENGTH) {
     throw ApiError.badRequest(
-      `Name is required and must be at least ${MIN_NAME_LENGTH} characters`,
+      `First name is required and must be at least ${MIN_NAME_LENGTH} characters`,
+    );
+  }
+
+  if (!isNonEmptyString(lastName) || lastName.trim().length < MIN_NAME_LENGTH) {
+    throw ApiError.badRequest(
+      `Last name is required and must be at least ${MIN_NAME_LENGTH} characters`,
     );
   }
 
@@ -50,7 +57,8 @@ export const validateRegisterInput = (body: unknown): RegisterInput => {
   }
 
   return {
-    name: name.trim(),
+    firstName: firstName.trim(),
+    lastName: lastName.trim(),
     email: email.trim().toLowerCase(),
     password,
   };

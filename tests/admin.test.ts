@@ -3,7 +3,8 @@ import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import app from '../src/app';
-import User, { UserRole, UserStatus } from '../src/models/User';
+import User from '../src/models/User';
+import { UserRole, UserStatus } from '../src/interfaces/IUser';
 
 // ─── Module mocks ──────────────────────────────────────────────────────────────
 
@@ -50,15 +51,19 @@ const signToken = (userId: string): string =>
   jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: '1h' });
 
 /** Create a User document directly — bypasses HTTP so passwords are hashed by the pre-save hook. */
-const createUser = async (overrides: Partial<{
-  name: string;
-  email: string;
-  password: string;
-  role: UserRole;
-  status: UserStatus;
-}> = {}): Promise<InstanceType<typeof User>> => {
+const createUser = async (
+  overrides: Partial<{
+    firstName: string;
+    lastName: string;
+    email: string;
+    password: string;
+    role: UserRole;
+    status: UserStatus;
+  }> = {},
+): Promise<InstanceType<typeof User>> => {
   return User.create({
-    name: overrides.name ?? 'Test User',
+    firstName: overrides.firstName ?? 'Test',
+    lastName: overrides.lastName ?? 'User',
     email: overrides.email ?? `user-${Date.now()}-${Math.random()}@example.com`,
     password: overrides.password ?? 'Password123!',
     role: overrides.role ?? UserRole.USER,

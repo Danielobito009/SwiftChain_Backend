@@ -1,19 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { StatusCodes } from 'http-status-codes';
-import User, { IUser } from '../models/User';
+import User from '../models/User';
+import type { IUser } from '../interfaces/IUser';
 import AppError from '../utils/AppError';
-
-// ─── Augment Express Request ───────────────────────────────────────────────────
-
-declare global {
-  namespace Express {
-    interface Request {
-      /** Populated by the `authenticate` middleware after token verification. */
-      user?: IUser;
-    }
-  }
-}
 
 // ─── JWT payload shape ────────────────────────────────────────────────────────
 
@@ -33,11 +23,7 @@ interface JwtPayload {
  * user that no longer exists.
  * Throws 403 if the user account has been suspended or banned.
  */
-const authenticate = async (
-  req: Request,
-  _res: Response,
-  next: NextFunction,
-): Promise<void> => {
+const authenticate = async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
   try {
     // 1. Extract token from Authorization header
     const authHeader = req.headers.authorization;
@@ -54,7 +40,10 @@ const authenticate = async (
     // 2. Verify and decode the JWT
     const secret = process.env.JWT_SECRET;
     if (!secret) {
-      throw new AppError('Server misconfiguration: JWT secret not set.', StatusCodes.INTERNAL_SERVER_ERROR);
+      throw new AppError(
+        'Server misconfiguration: JWT secret not set.',
+        StatusCodes.INTERNAL_SERVER_ERROR,
+      );
     }
 
     let decoded: JwtPayload;
@@ -85,7 +74,7 @@ const authenticate = async (
     }
 
     // 5. Attach user to request for downstream middleware/controllers
-    req.user = user;
+    (req as Request & { user?: IUser }).user = user as unknown as IUser;
     next();
   } catch (error) {
     next(error);

@@ -1,6 +1,6 @@
 import mongoose, { Schema } from 'mongoose';
 import bcrypt from 'bcryptjs';
-import { IUser, UserRole } from '../interfaces/IUser';
+import { IUser, UserRole, UserStatus } from '../interfaces/IUser';
 
 const userSchema = new Schema<IUser>(
   {
@@ -35,6 +35,17 @@ const userSchema = new Schema<IUser>(
       enum: Object.values(UserRole),
       default: UserRole.USER,
     },
+    status: {
+      type: String,
+      enum: Object.values(UserStatus),
+      default: UserStatus.ACTIVE,
+    },
+    suspendedReason: {
+      type: String,
+    },
+    suspendedAt: {
+      type: Date,
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -43,7 +54,7 @@ const userSchema = new Schema<IUser>(
   {
     timestamps: true,
     toJSON: {
-      transform(_doc, ret): any {
+      transform(_doc, ret): Record<string, unknown> {
         ret.id = ret._id;
         delete ret._id;
         delete ret.__v;
@@ -79,26 +90,5 @@ userSchema.methods.comparePassword = async function (candidatePassword: string):
 userSchema.index({ email: 1 });
 
 const User = mongoose.model<IUser>('User', userSchema);
-import mongoose, { Document, Model } from 'mongoose';
-
-export interface IUser extends Document {
-  email: string;
-  name?: string;
-  role?: string;
-  password?: string;
-  createdAt: Date;
-}
-
-const UserSchema = new mongoose.Schema(
-  {
-    email: { type: String, required: true, unique: true },
-    name: { type: String },
-    role: { type: String, default: 'user' },
-    password: { type: String },
-  },
-  { timestamps: { createdAt: 'createdAt', updatedAt: false }, versionKey: false },
-);
-
-const User = (mongoose.models.User as Model<IUser>) || mongoose.model<IUser>('User', UserSchema);
 
 export default User;

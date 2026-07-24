@@ -6,6 +6,12 @@ export enum UserRole {
   ADMIN = 'admin',
 }
 
+export enum UserStatus {
+  ACTIVE = 'active',
+  SUSPENDED = 'suspended',
+  BANNED = 'banned',
+}
+
 export interface IUser extends Document {
   email: string;
   password: string;
@@ -13,6 +19,9 @@ export interface IUser extends Document {
   lastName: string;
   role: UserRole;
   isActive: boolean;
+  status: UserStatus;
+  suspendedReason?: string;
+  suspendedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;

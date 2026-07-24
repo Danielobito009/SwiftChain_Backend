@@ -4,6 +4,8 @@ import jwt from 'jsonwebtoken';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Delivery } from '../src/models/deliveryModel';
 
+import { Express } from 'express';
+
 jest.setTimeout(60000);
 
 jest.mock('../src/config/logger', () => ({
@@ -14,7 +16,7 @@ jest.mock('../src/config/logger', () => ({
 }));
 
 describe('Delivery Status Update API', () => {
-  let app: any;
+  let app: Express;
   let mongoServer: MongoMemoryServer;
   const jwtSecret = 'test-secret';
 

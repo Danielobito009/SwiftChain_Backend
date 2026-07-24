@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { StatusCodes } from 'http-status-codes';
-import { UserRole } from '../models/User';
+import { UserRole } from '../interfaces/IUser';
+import type { IUser } from '../interfaces/IUser';
 import AppError from '../utils/AppError';
 
 /**
@@ -16,7 +17,9 @@ import AppError from '../utils/AppError';
  */
 const requireRole = (...allowedRoles: UserRole[]) => {
   return (req: Request, _res: Response, next: NextFunction): void => {
-    if (!req.user) {
+    const user = (req as Request & { user?: IUser }).user;
+
+    if (!user) {
       // Defensive: authenticate should always run first
       return next(
         new AppError(
@@ -26,7 +29,7 @@ const requireRole = (...allowedRoles: UserRole[]) => {
       );
     }
 
-    if (!allowedRoles.includes(req.user.role as UserRole)) {
+    if (!allowedRoles.includes(user.role as UserRole)) {
       return next(
         new AppError(
           'Access denied. You do not have permission to perform this action.',

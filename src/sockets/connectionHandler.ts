@@ -47,8 +47,7 @@ export function initializeSocketServer(httpServer: HttpServer): TypedServer {
     pingTimeout: parseInt(process.env.SOCKET_PING_TIMEOUT_MS ?? '20000', 10),
     pingInterval: parseInt(process.env.SOCKET_PING_INTERVAL_MS ?? '25000', 10),
     // Allow only websocket transport in production for efficiency
-    transports:
-      process.env.NODE_ENV === 'production' ? ['websocket'] : ['websocket', 'polling'],
+    transports: process.env.NODE_ENV === 'production' ? ['websocket'] : ['websocket', 'polling'],
   });
 
   // ─── Per-connection setup ──────────────────────────────────────────────────

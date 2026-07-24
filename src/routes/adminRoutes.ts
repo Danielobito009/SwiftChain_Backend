@@ -2,7 +2,7 @@ import { Router } from 'express';
 import authenticate from '../middleware/authenticate';
 import requireRole from '../middleware/requireRole';
 import { suspendUser } from '../controllers/adminController';
-import { UserRole } from '../models/User';
+import { UserRole } from '../interfaces/IUser';
 
 const router = Router();
 

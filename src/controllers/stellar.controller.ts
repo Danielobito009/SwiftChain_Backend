@@ -48,11 +48,7 @@ export class StellarController {
    * }
    * ```
    */
-  public async checkHealth(
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> {
+  public async checkHealth(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const result = await sorobanService.checkConnectivity();
 
@@ -90,11 +86,7 @@ export class StellarController {
    * }
    * ```
    */
-  public async getNetworkInfo(
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> {
+  public async getNetworkInfo(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const info = await sorobanService.getNetworkInfo();
 
@@ -121,11 +113,7 @@ export class StellarController {
    * }
    * ```
    */
-  public async getLatestLedger(
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> {
+  public async getLatestLedger(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const latestLedger = await sorobanService.getLatestLedger();
 
