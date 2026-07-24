@@ -11,6 +11,9 @@ importers:
       '@stellar/stellar-sdk':
         specifier: 13.1.0
         version: 13.1.0(bare-url@2.3.2)
+      axios:
+        specifier: ^1.6.0
+        version: 1.18.1
       bcryptjs:
         specifier: 2.4.3
         version: 2.4.3
@@ -18,13 +21,13 @@ importers:
         specifier: 1.7.4
         version: 1.7.4
       cors:
-        specifier: 2.8.5
+        specifier: ^2.8.5
         version: 2.8.5
       dotenv:
-        specifier: 16.3.1
+        specifier: ^16.3.1
         version: 16.3.1
       express:
-        specifier: 4.18.2
+        specifier: ^4.18.2
         version: 4.18.2
       express-rate-limit:
         specifier: 6.11.0
@@ -39,7 +42,7 @@ importers:
         specifier: 9.0.2
         version: 9.0.2
       mongoose:
-        specifier: 7.6.3
+        specifier: ^7.6.3
         version: 7.6.3
       socket.io:
         specifier: 4.7.2
@@ -48,12 +51,15 @@ importers:
         specifier: 9.0.1
         version: 9.0.1
       winston:
-        specifier: 3.11.0
+        specifier: ^3.11.0
         version: 3.11.0
       zod:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@types/axios':
+        specifier: ^0.14.0
+        version: 0.14.4
       '@types/bcryptjs':
         specifier: 2.4.6
         version: 2.4.6
@@ -61,10 +67,10 @@ importers:
         specifier: 1.7.5
         version: 1.7.5
       '@types/cors':
-        specifier: 2.8.17
+        specifier: ^2.8.17
         version: 2.8.17
       '@types/express':
-        specifier: 4.17.21
+        specifier: ^4.17.21
         version: 4.17.21
       '@types/jest':
         specifier: ^30.0.0
@@ -76,7 +82,7 @@ importers:
         specifier: 5.11.97
         version: 5.11.97
       '@types/node':
-        specifier: 20.10.0
+        specifier: ^20.10.0
         version: 20.10.0
       '@types/socket.io':
         specifier: 3.0.2
@@ -84,6 +90,9 @@ importers:
       '@types/supertest':
         specifier: ^7.2.0
         version: 7.2.0
+      '@types/winston':
+        specifier: ^2.4.4
+        version: 2.4.4
       '@typescript-eslint/eslint-plugin':
         specifier: 6.13.2
         version: 6.13.2(@typescript-eslint/parser@6.13.2(eslint@8.55.0)(typescript@5.2.2))(eslint@8.55.0)(typescript@5.2.2)
@@ -112,7 +121,7 @@ importers:
         specifier: 9.1.6
         version: 9.1.6
       nodemon:
-        specifier: 3.0.2
+        specifier: ^3.0.2
         version: 3.0.2
       prettier:
         specifier: 3.1.1
@@ -124,10 +133,10 @@ importers:
         specifier: ^29.4.11
         version: 29.4.11(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(babel-jest@30.4.1(@babel/core@7.29.7))(jest-util@30.4.1)(jest@30.4.2(@types/node@20.10.0)(ts-node@10.9.2(@types/node@20.10.0)(typescript@5.2.2)))(typescript@5.2.2)
       ts-node:
-        specifier: 10.9.2
+        specifier: ^10.9.2
         version: 10.9.2(@types/node@20.10.0)(typescript@5.2.2)
       typescript:
-        specifier: 5.2.2
+        specifier: ^5.2.2
         version: 5.2.2
 
 packages:
@@ -538,6 +547,10 @@ packages:
   '@tybys/wasm-util@0.10.3':
     resolution: {integrity: sha512-F3fo1MYrRJYL3zER0OUOmkutjr1Vp23m7OsSgp7nq4SP6OqX6C/56XFIPAl5bt3zaBRjmW7SGz3u/6LwFpYcOg==}
 
+  '@types/axios@0.14.4':
+    resolution: {integrity: sha512-9JgOaunvQdsQ/qW2OPmE5+hCeUB52lQSolecrFrthct55QekhmXEwT203s20RL+UHtCQc15y3VXpby9E7Kkh/g==}
+    deprecated: This is a stub types definition. axios provides its own type definitions, so you do not need this installed.
+
   '@types/babel__core@7.20.5':
     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
 
@@ -645,6 +658,10 @@ packages:
   '@types/whatwg-url@8.2.2':
     resolution: {integrity: sha512-FtQu10RWgn3D9U4aazdwIE2yzphmTJREDqNdODHrbrZmmMqI0vMheC/6NE/J1Yveaj8H+ela+YwWTjq5PGmuhA==}
 
+  '@types/winston@2.4.4':
+    resolution: {integrity: sha512-BVGCztsypW8EYwJ+Hq+QNYiT/MUyCif0ouBH+flrY66O5W+KIXAMML6E/0fJpm7VjIzgangahl5S03bJJQGrZw==}
+    deprecated: This is a stub types definition. winston provides its own type definitions, so you do not need this installed.
+
   '@types/yargs-parser@21.0.3':
     resolution: {integrity: sha512-I4q9QU9MQv4oEOz4tAHJtNz1cwuLxn2F3xcc2iV5WdqLPpUnj30aUuxt1mAxYTG+oe8CZMV/+6rU4S4gRDzqtQ==}
 
@@ -711,7 +728,6 @@ packages:
 
   '@ungap/structured-clone@1.3.0':
     resolution: {integrity: sha512-WmoN8qaIAo7WTYWbAZuG8PYEhn5fkz7dZrqTBZ7dtt//lL2Gwms1IcnQ5yHqjDfX8Ft5j4YzDM23f87zBfDe9g==}
-    deprecated: Potential CWE-502 - Update to 1.3.1 or higher
 
   '@unrs/resolver-binding-android-arm-eabi@1.12.2':
     resolution: {integrity: sha512-g5T90pqg1bo/7mytQx6F4iBNC0Wsh9cu+z9veDbFjc7HjpesJFWD7QMS0NGStXM075+7dJPPVvBbpZlnrdpi/w==}
@@ -752,61 +768,51 @@ packages:
     resolution: {integrity: sha512-zJc0H99FEPoFfSrNpa91HYfxzfAJCr502oxNK1cfdC9hlaFI43RT+JFCann9JUgZmLzzntChHyn13Sgn9ljHNg==}
     cpu: [arm64]
     os: [linux]
-    libc: [glibc]
 
   '@unrs/resolver-binding-linux-arm64-musl@1.12.2':
     resolution: {integrity: sha512-KQ3Lki6l+Pz1k/eBipN41ES+YUK30beLGb9YqcB1O542cyLCNE6GaxrfcY3T6EezmGGk84wb5XyO9loTM9tkcA==}
     cpu: [arm64]
     os: [linux]
-    libc: [musl]
 
   '@unrs/resolver-binding-linux-loong64-gnu@1.12.2':
     resolution: {integrity: sha512-3SJGEh1DborhG6pyxvhPzCT4bbSIVihsvgJc13P1bHG7KLdNDaF9T3gsTwFc7Jw/5Y5/iWOjkEx7Zy0NvCGX3Q==}
     cpu: [loong64]
     os: [linux]
-    libc: [glibc]
 
   '@unrs/resolver-binding-linux-loong64-musl@1.12.2':
     resolution: {integrity: sha512-jiuG/Obbel7uw1PwHNFfrkiKhLAF6mnyZ6aWlOAVN9WqKm8v0OFGnciJIHu8+CMvXLQ8AD51LPzAoUfT21D5Ew==}
     cpu: [loong64]
     os: [linux]
-    libc: [musl]
 
   '@unrs/resolver-binding-linux-ppc64-gnu@1.12.2':
     resolution: {integrity: sha512-q7xRvVpmcfeL+LlZg8Pbbo6QaTZwDU5BaGZbwfhkEsXJn3Was8xYfE0RBH266xZt0rM6B7i8xAYIvjthuUIWHg==}
     cpu: [ppc64]
     os: [linux]
-    libc: [glibc]
 
   '@unrs/resolver-binding-linux-riscv64-gnu@1.12.2':
     resolution: {integrity: sha512-0CVdx6lcnT3Q9inOH8tsMIOJ6ImndllMjqJHg8RLVdB7Vq4SfkEXl9mCSsVNuNA4MCYycRicCUxPCabVHJRr6A==}
     cpu: [riscv64]
     os: [linux]
-    libc: [glibc]
 
   '@unrs/resolver-binding-linux-riscv64-musl@1.12.2':
     resolution: {integrity: sha512-iOwlRo9vnp6R6ohHQS11n0NnfdXx/omhkocmIfaPRpQhKZ+3BDMkkdRVh53qjkFkpPddf+FETA28NwGN7l5l+w==}
     cpu: [riscv64]
     os: [linux]
-    libc: [musl]
 
   '@unrs/resolver-binding-linux-s390x-gnu@1.12.2':
     resolution: {integrity: sha512-HYJtLfXq94q8iZNFT1lknx258wlkkWhZeUXJRqzKBBUJ00CvZ+N33zgbCqimLjsyw5Va6uUxhVa12mI+kaveEw==}
     cpu: [s390x]
     os: [linux]
-    libc: [glibc]
 
   '@unrs/resolver-binding-linux-x64-gnu@1.12.2':
     resolution: {integrity: sha512-mPsUhunKKDih5O96Y6enDQyHc1SqBPlY1E/SfMWDM3EdJ95Z9CArPeCVwCCqbP45ljvivdEk8Fxn+SIb1rDAJQ==}
     cpu: [x64]
     os: [linux]
-    libc: [glibc]
 
   '@unrs/resolver-binding-linux-x64-musl@1.12.2':
     resolution: {integrity: sha512-azrt6+5ydLd8Vt210AAFis/lZevSfPw93EJRIJG+xPu4WCJ8K0kppCTpMyLPcKT7H15M4Jnt2tMp5bOvCkRC6A==}
     cpu: [x64]
     os: [linux]
-    libc: [musl]
 
   '@unrs/resolver-binding-openharmony-arm64@1.12.2':
     resolution: {integrity: sha512-YZ9hP4O0X9PQb8eO980qmLNGH4zT3I9+SZTdt0Pr0YyuGQhYKoOZkV02VzrzyOZJ5xIJ3UFIenKkUkGg8GjgWQ==}
@@ -965,8 +971,8 @@ packages:
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
 
-  bare-addon-resolve@1.10.0:
-    resolution: {integrity: sha512-sSd0jieRJlDaODOzj0oe0RjFVC1QI0ZIjGIdPkbrTXsdVVtENg14c+lHHAhHwmWCZ2nQlMhy8jA3Y5LYPc/isA==}
+  bare-addon-resolve@1.10.1:
+    resolution: {integrity: sha512-F/SD2du8keuYSb4xipnGz5j2E6yhNdHA8ZVxtHae6h2uOrpBIjjbhXvjzKZbr5XUOzqBzh/i8GVFycj2DlFQIA==}
     peerDependencies:
       bare-url: '*'
     peerDependenciesMeta:
@@ -990,8 +996,8 @@ packages:
       bare-buffer:
         optional: true
 
-  bare-module-resolve@1.12.2:
-    resolution: {integrity: sha512-j+hiD5k99qec4KjJvYsI67q5AOBifmy9JG3oeMVxTmvrhn2sIdp8StrUvZu4YNgwTpO+NhniQG16N1ETDe1k5w==}
+  bare-module-resolve@1.12.4:
+    resolution: {integrity: sha512-xcfgg2u7HqgJiBmah71O9vvdFAgHCvkqC/WSC2O7Bbgosoc1eC/BWe/6IDJ4OsfKlkxuvC/TDWXC+oH5yeW8mA==}
     peerDependencies:
       bare-url: '*'
     peerDependenciesMeta:
@@ -2645,9 +2651,6 @@ packages:
     resolution: {integrity: sha512-XGuRDNjXUijsUL0vl6nSD7cwURuzEgglbOaFuZM9g3kwDXOWVTck0jLzjPzGD+TazWbboZYu52/9/XPdUgne9g==}
     engines: {node: '>= 0.8.0'}
 
-  setprototypeof@1.2.0:
-    resolution: {integrity: sha512-E5LDX7Wrp85Kil5bhZv46j8jOeboKq5JMmYM3gVGdGH8xFpPWXUMsNrlODCrkoxMEeNi/XZIwuRvY4XNwYMJpw==}
-
   set-function-length@1.2.2:
     resolution: {integrity: sha512-pgRc4hJ4/sNjWCSS9AmnS40x3bNMDTknHgL5UaMBTMyJnU90EgWh1Rz+MC9eFu4BuN/UwZjKQuY/1v3rM7HMfg==}
     engines: {node: '>= 0.4'}
@@ -2668,10 +2671,6 @@ packages:
     resolution: {integrity: sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==}
     engines: {node: '>=8'}
 
-  side-channel-list@1.0.0:
-    resolution: {integrity: sha512-FCLHtRD/gnpCiCHEiJLOwdmFP+wzCmDEkc9y7NsYxeF4u7Btsn1ZuwgwJGxImImHicJArLP4R0yX4c2KCrMrTA==}
-    engines: {node: '>= 0.4'}
-
   side-channel-list@1.0.1:
     resolution: {integrity: sha512-mjn/0bi/oUURjc5Xl7IaWi/OJJJumuoJFQJfDDyO46+hBWsfaVM65TBHq2eoZBhzl9EchxOijpkbRC8SVBQU0w==}
     engines: {node: '>= 0.4'}
@@ -2682,10 +2681,6 @@ packages:
 
   side-channel-weakmap@1.0.2:
     resolution: {integrity: sha512-WPS/HvHQTYnHisLo9McqBHOJk2FkHO/tlpvldyrnem4aeQp4hai3gythswg6p01oSoTl58rcpiFAjF2br2Ak2A==}
-    engines: {node: '>= 0.4'}
-
-  side-channel@1.1.0:
-    resolution: {integrity: sha512-ZX99e6tRweoUXqR+VBrslhda51Nh5MTQwou5tnUDgbtyM0dBgmhEDtWGP/xbKn6hqfPRHujUNwz5fy/wbbhnpw==}
     engines: {node: '>= 0.4'}
 
   side-channel@1.1.1:
@@ -2725,8 +2720,8 @@ packages:
   socket.io-adapter@2.5.8:
     resolution: {integrity: sha512-6Oy52pbg+kvdCVvjcN+FnY7BvxZ7cIHNScbvztT/It5d0vbwoJoVZmF2gjJmnV0/4WlXRfG15zc45ySk9Ah8bw==}
 
-  socket.io-parser@4.2.6:
-    resolution: {integrity: sha512-asJqbVBDsBCJx0pTqw3WfesSY0iRX+2xzWEWzrpcH7L6fLzrhyF8WPI8UaeM4YCuDfpwA/cgsdugMsmtz8EJeg==}
+  socket.io-parser@4.2.7:
+    resolution: {integrity: sha512-IH/iSeO9T6gz1KkFleGDWkG9N3dl4jXVYUtMhIqH10Md0ttMer8nUNWiP1DKuNrybD2xBrixLJdCC9J6ECoYkg==}
     engines: {node: '>=10.0.0'}
 
   socket.io@4.7.2:
@@ -3012,7 +3007,6 @@ packages:
 
   uuid@9.0.1:
     resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
-    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
   v8-compile-cache-lib@3.0.1:
@@ -3092,8 +3086,8 @@ packages:
       utf-8-validate:
         optional: true
 
-  ws@8.21.0:
-    resolution: {integrity: sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g==}
+  ws@8.21.1:
+    resolution: {integrity: sha512-+0NTnW77fFN/DjQi6k/Sq/Yvk4Sgajw7urW8V+asjXnRgDs9gyGkdb7EzgfhA4goXsRIZKE28fzIXBHEzhuiWw==}
     engines: {node: '>=10.0.0'}
     peerDependencies:
       bufferutil: ^4.0.1
@@ -3707,6 +3701,13 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
+  '@types/axios@0.14.4':
+    dependencies:
+      axios: 1.18.1
+    transitivePeerDependencies:
+      - debug
+      - supports-color
+
   '@types/babel__core@7.20.5':
     dependencies:
       '@babel/parser': 7.29.7
@@ -3850,6 +3851,10 @@ snapshots:
     dependencies:
       '@types/node': 20.10.0
       '@types/webidl-conversions': 7.0.3
+
+  '@types/winston@2.4.4':
+    dependencies:
+      winston: 3.11.0
 
   '@types/yargs-parser@21.0.3': {}
 
@@ -4161,9 +4166,9 @@ snapshots:
 
   balanced-match@1.0.2: {}
 
-  bare-addon-resolve@1.10.0(bare-url@2.3.2):
+  bare-addon-resolve@1.10.1(bare-url@2.3.2):
     dependencies:
-      bare-module-resolve: 1.12.2(bare-url@2.3.2)
+      bare-module-resolve: 1.12.4(bare-url@2.3.2)
       bare-semver: 1.1.0
     optionalDependencies:
       bare-url: 2.3.2
@@ -4182,7 +4187,7 @@ snapshots:
       - bare-abort-controller
       - react-native-b4a
 
-  bare-module-resolve@1.12.2(bare-url@2.3.2):
+  bare-module-resolve@1.12.4(bare-url@2.3.2):
     dependencies:
       bare-semver: 1.1.0
     optionalDependencies:
@@ -5080,7 +5085,7 @@ snapshots:
       '@babel/parser': 7.29.7
       '@istanbuljs/schema': 0.1.6
       istanbul-lib-coverage: 3.2.2
-      semver: 7.7.4
+      semver: 7.8.5
     transitivePeerDependencies:
       - supports-color
 
@@ -5366,7 +5371,7 @@ snapshots:
       jest-message-util: 30.4.1
       jest-util: 30.4.1
       pretty-format: 30.4.1
-      semver: 7.7.4
+      semver: 7.8.5
       synckit: 0.11.13
     transitivePeerDependencies:
       - supports-color
@@ -5566,7 +5571,7 @@ snapshots:
 
   make-dir@4.0.0:
     dependencies:
-      semver: 7.7.4
+      semver: 7.8.5
 
   make-error@1.3.6: {}
 
@@ -5746,7 +5751,7 @@ snapshots:
       ignore-by-default: 1.0.1
       minimatch: 3.1.5
       pstree.remy: 1.1.8
-      semver: 7.7.4
+      semver: 7.8.5
       simple-update-notifier: 2.0.0
       supports-color: 5.5.0
       touch: 3.1.1
@@ -5899,7 +5904,7 @@ snapshots:
 
   qs@6.11.0:
     dependencies:
-      side-channel: 1.1.0
+      side-channel: 1.1.1
 
   qs@6.15.3:
     dependencies:
@@ -5937,7 +5942,7 @@ snapshots:
 
   require-addon@1.2.0(bare-url@2.3.2):
     dependencies:
-      bare-addon-resolve: 1.10.0(bare-url@2.3.2)
+      bare-addon-resolve: 1.10.1(bare-url@2.3.2)
     transitivePeerDependencies:
       - bare-url
     optional: true
@@ -6033,11 +6038,6 @@ snapshots:
 
   shebang-regex@3.0.0: {}
 
-  side-channel-list@1.0.0:
-    dependencies:
-      es-errors: 1.3.0
-      object-inspect: 1.13.4
-
   side-channel-list@1.0.1:
     dependencies:
       es-errors: 1.3.0
@@ -6058,14 +6058,6 @@ snapshots:
       object-inspect: 1.13.4
       side-channel-map: 1.0.1
 
-  side-channel@1.1.0:
-    dependencies:
-      es-errors: 1.3.0
-      object-inspect: 1.13.4
-      side-channel-list: 1.0.0
-      side-channel-map: 1.0.1
-      side-channel-weakmap: 1.0.2
-
   side-channel@1.1.1:
     dependencies:
       es-errors: 1.3.0
@@ -6082,7 +6074,7 @@ snapshots:
 
   simple-update-notifier@2.0.0:
     dependencies:
-      semver: 7.7.4
+      semver: 7.8.5
 
   slash@3.0.0: {}
 
@@ -6101,13 +6093,13 @@ snapshots:
   socket.io-adapter@2.5.8:
     dependencies:
       debug: 4.4.3(supports-color@5.5.0)
-      ws: 8.21.0
+      ws: 8.21.1
     transitivePeerDependencies:
       - bufferutil
       - supports-color
       - utf-8-validate
 
-  socket.io-parser@4.2.6:
+  socket.io-parser@4.2.7:
     dependencies:
       '@socket.io/component-emitter': 3.1.2
       debug: 4.4.3(supports-color@5.5.0)
@@ -6122,7 +6114,7 @@ snapshots:
       debug: 4.3.4
       engine.io: 6.5.5
       socket.io-adapter: 2.5.8
-      socket.io-parser: 4.2.6
+      socket.io-parser: 4.2.7
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -6523,7 +6515,7 @@ snapshots:
 
   ws@8.17.1: {}
 
-  ws@8.21.0: {}
+  ws@8.21.1: {}
 
   y18n@5.0.8: {}
 
