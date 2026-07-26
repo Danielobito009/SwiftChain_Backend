@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import app from './app';
 import logger from './config/logger';
+import { startEscrowMonitorJob, stopEscrowMonitorJob } from './jobs/escrowMonitor';
 
 dotenv.config();
 
@@ -12,8 +13,13 @@ app.listen(PORT, () => {
   logger.info(`📦 ETA endpoint: http://localhost:${PORT}/api/v1/deliveries/:id/eta`);
 });
 
+if (process.env.NODE_ENV !== 'test') {
+  startEscrowMonitorJob();
+}
+
 const gracefulShutdown = (): void => {
   logger.info('Shutting down gracefully...');
+  stopEscrowMonitorJob();
   process.exit(0);
 };
 
