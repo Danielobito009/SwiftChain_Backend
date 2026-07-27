@@ -50,6 +50,13 @@ const userSchema = new Schema<IUser>(
       type: Boolean,
       default: true,
     },
+    walletAddress: {
+      type: String,
+      trim: true,
+      unique: true,
+      sparse: true,
+      match: [/^G[A-Z2-7]{55}$/, 'Please provide a valid Stellar public key'],
+    },
   },
   {
     timestamps: true,
