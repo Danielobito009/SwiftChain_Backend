@@ -2,6 +2,7 @@ import { Router } from 'express';
 import authController from '../controllers/authController';
 import validate from '../middleware/validate';
 import { loginSchema } from '../validators/authValidator';
+import { authLimiter } from '../middlewares/rateLimiter';
 
 const router = Router();
 
@@ -34,7 +35,12 @@ const router = Router();
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/login', validate(loginSchema), authController.login);
+router.post(
+  '/login',
+  authLimiter,
+  validate(loginSchema),
+  authController.login
+);
 
 /**
  * @openapi
@@ -69,6 +75,6 @@ router.post('/login', validate(loginSchema), authController.login);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/register', authController.register);
+router.post('/register', authLimiter, authController.register);
 
 export default router;
