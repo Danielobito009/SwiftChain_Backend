@@ -14,6 +14,15 @@ interface EnvConfig {
   CORS_ORIGIN: string;
   RATE_LIMIT_WINDOW_MS: number;
   RATE_LIMIT_MAX_REQUESTS: number;
+  APP_BASE_URL: string;
+  UPLOAD_STORAGE_DRIVER: 'local' | 's3';
+  UPLOAD_LOCAL_DIR: string;
+  UPLOAD_MAX_FILE_SIZE_MB: number;
+  AWS_REGION: string;
+  AWS_ACCESS_KEY_ID: string;
+  AWS_SECRET_ACCESS_KEY: string;
+  AWS_S3_BUCKET: string;
+  AWS_S3_SIGNED_URL_EXPIRES_SECONDS: number;
 }
 
 const envSchema = z.object({
@@ -27,6 +36,15 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('*'),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(900000),
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().min(1).default(100),
+  APP_BASE_URL: z.string().default('http://localhost:3000'),
+  UPLOAD_STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
+  UPLOAD_LOCAL_DIR: z.string().default('uploads'),
+  UPLOAD_MAX_FILE_SIZE_MB: z.coerce.number().int().min(1).max(100).default(10),
+  AWS_REGION: z.string().default('us-east-1'),
+  AWS_ACCESS_KEY_ID: z.string().default(''),
+  AWS_SECRET_ACCESS_KEY: z.string().default(''),
+  AWS_S3_BUCKET: z.string().default(''),
+  AWS_S3_SIGNED_URL_EXPIRES_SECONDS: z.coerce.number().int().min(60).default(3600),
 });
 
 let env: EnvConfig;
@@ -45,6 +63,12 @@ try {
     // eslint-disable-next-line no-console
     console.error('❌ Failed to parse environment variables:', error);
   }
+  process.exit(1);
+}
+
+if (env.UPLOAD_STORAGE_DRIVER === 's3' && !env.AWS_S3_BUCKET) {
+  // eslint-disable-next-line no-console
+  console.error('❌ AWS_S3_BUCKET is required when UPLOAD_STORAGE_DRIVER=s3');
   process.exit(1);
 }
 
