@@ -1,64 +1,99 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema, Document, Types } from 'mongoose';
 
 /**
- * Lifecycle states for an escrow lock.
+ * Lifecycle of funds held in a Soroban escrow contract for a delivery.
  */
-export enum EscrowStatus {
+export enum EscrowLockStatus {
+  PENDING = 'pending',
   LOCKED = 'locked',
   RELEASED = 'released',
-  EXPIRED = 'expired',
-  RESOLVED = 'resolved',
+  REFUNDED = 'refunded',
+}
+
+/** The kind of on-chain operation a recorded transaction hash represents. */
+export type EscrowTransactionType = 'fund' | 'release' | 'refund';
+
+export interface IEscrowTransaction {
+  hash: string;
+  type: EscrowTransactionType;
+  ledger?: number;
+  recordedAt: Date;
 }
 
 export interface IEscrow extends Document {
-  deliveryId: string;
-  contractId?: string;
+  delivery: Types.ObjectId;
+  contractId: string;
   amount: number;
-  lockedAt: Date;
-  ttlSeconds: number;
-  expiresAt: Date;
-  status: EscrowStatus;
-  flaggedAt?: Date;
-  flaggedLedger?: number;
-  resolvedAt?: Date;
-  resolvedBy?: string;
-  resolutionNotes?: string;
+  asset: string;
+  lockStatus: EscrowLockStatus;
+  fundedBy?: string;
+  transactions: IEscrowTransaction[];
+  lockedAt?: Date;
+  releasedAt?: Date;
+  refundedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
 
+const EscrowTransactionSchema = new Schema<IEscrowTransaction>(
+  {
+    hash: { type: String, required: true, trim: true },
+    type: {
+      type: String,
+      enum: ['fund', 'release', 'refund'],
+      required: true,
+    },
+    ledger: { type: Number },
+    recordedAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
 const EscrowSchema = new Schema<IEscrow>(
   {
-    deliveryId: { type: String, required: true, index: true },
-    contractId: { type: String },
-    amount: { type: Number, required: true, min: 0 },
-    lockedAt: { type: Date, required: true },
-    ttlSeconds: { type: Number, required: true, min: 1 },
-    expiresAt: { type: Date, required: true, index: true },
-    status: {
-      type: String,
-      enum: Object.values(EscrowStatus),
-      default: EscrowStatus.LOCKED,
+    delivery: {
+      type: Schema.Types.ObjectId,
+      ref: 'Delivery',
+      required: true,
       index: true,
     },
-    flaggedAt: { type: Date },
-    flaggedLedger: { type: Number },
-    resolvedAt: { type: Date },
-    resolvedBy: { type: String },
-    resolutionNotes: { type: String },
+    contractId: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+    },
+    amount: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    asset: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    lockStatus: {
+      type: String,
+      enum: Object.values(EscrowLockStatus),
+      default: EscrowLockStatus.PENDING,
+      index: true,
+    },
+    fundedBy: { type: String, trim: true },
+    transactions: {
+      type: [EscrowTransactionSchema],
+      default: [],
+    },
+    lockedAt: { type: Date },
+    releasedAt: { type: Date },
+    refundedAt: { type: Date },
   },
   { timestamps: true },
 );
 
-// Speeds up the recurring scan for locks past their TTL.
-EscrowSchema.index({ status: 1, expiresAt: 1 });
-
-EscrowSchema.pre('validate', function (this: IEscrow, next) {
-  if (!this.expiresAt && this.lockedAt && this.ttlSeconds) {
-    this.expiresAt = new Date(this.lockedAt.getTime() + this.ttlSeconds * 1000);
-  }
-  next();
-});
+// A given on-chain transaction hash must only ever be recorded once across
+// all escrows, preventing duplicate ingestion by the indexer.
+EscrowSchema.index({ 'transactions.hash': 1 }, { unique: true, sparse: true });
 
 const Escrow = mongoose.model<IEscrow>('Escrow', EscrowSchema);
 
