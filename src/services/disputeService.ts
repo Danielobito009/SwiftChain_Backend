@@ -148,10 +148,7 @@ export const getDisputes = async (filters: DisputeFilter) => {
   };
 };
 
-export const resolveDispute = async (
-  id: string,
-  input: ResolveDisputeInput,
-): Promise<IDispute> => {
+export const resolveDispute = async (id: string, input: ResolveDisputeInput): Promise<IDispute> => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new AppError('Invalid dispute ID format.', StatusCodes.BAD_REQUEST);
   }
@@ -182,9 +179,7 @@ export const resolveDispute = async (
 
   await dispute.save();
 
-  logger.info(
-    `[Dispute] Dispute ${id} updated to status '${input.status}' by ${input.resolvedBy}`,
-  );
+  logger.info(`[Dispute] Dispute ${id} updated to status '${input.status}' by ${input.resolvedBy}`);
 
   return dispute;
 };
@@ -200,7 +195,10 @@ export const addEvidence = async (id: string, input: AddEvidenceInput): Promise<
   }
 
   if (dispute.status === DisputeStatus.RESOLVED || dispute.status === DisputeStatus.REJECTED) {
-    throw new AppError('Evidence cannot be added to a resolved or rejected dispute.', StatusCodes.CONFLICT);
+    throw new AppError(
+      'Evidence cannot be added to a resolved or rejected dispute.',
+      StatusCodes.CONFLICT,
+    );
   }
 
   const existingUrls = dispute.evidenceUrls || [];
