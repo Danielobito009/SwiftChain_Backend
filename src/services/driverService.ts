@@ -1,5 +1,7 @@
+import { StatusCodes } from 'http-status-codes';
 import DriverProfile from '../models/DriverProfile';
-import { IDriverProfile } from '../interfaces/IDriverProfile';
+import { IDriverProfile, IVehicleDetails } from '../interfaces/IDriverProfile';
+import AppError from '../utils/AppError';
 
 export interface LeaderboardEntry {
   rank: number;
@@ -51,6 +53,36 @@ export class DriverService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  /**
+   * Creates or updates the vehicle details on a driver's profile.
+   *
+   * If the driver has no DriverProfile document yet (e.g. reputation events
+   * haven't fired for them), one is created with default reputation stats
+   * alongside the supplied vehicle details.
+   */
+  async setVehicleDetails(
+    userId: string,
+    vehicleDetails: IVehicleDetails,
+  ): Promise<IDriverProfile> {
+    if (!vehicleDetails.make || !vehicleDetails.make.trim()) {
+      throw new AppError('Vehicle make is required.', StatusCodes.BAD_REQUEST);
+    }
+    if (!vehicleDetails.model || !vehicleDetails.model.trim()) {
+      throw new AppError('Vehicle model is required.', StatusCodes.BAD_REQUEST);
+    }
+    if (!vehicleDetails.plateNumber || !vehicleDetails.plateNumber.trim()) {
+      throw new AppError('Vehicle plate number is required.', StatusCodes.BAD_REQUEST);
+    }
+
+    const profile = await DriverProfile.findOneAndUpdate(
+      { userId },
+      { $set: { vehicleDetails } },
+      { new: true, upsert: true, setDefaultsOnInsert: true, runValidators: true },
+    );
+
+    return profile;
   }
 }
 
