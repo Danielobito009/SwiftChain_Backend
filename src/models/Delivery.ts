@@ -4,6 +4,10 @@ export interface IDelivery extends Document {
   deliveryId: string;
   driverId: string;
   userId: string;
+  sender: mongoose.Types.ObjectId;
+  recipient: mongoose.Types.ObjectId;
+  contractId?: string;
+  metadata?: Record<string, unknown>;
   trackingNumber?: string;
   customer?: ICustomer;
   pickup?: ILocation;
@@ -71,6 +75,10 @@ const DeliverySchema = new Schema<IDelivery>(
     deliveryId: { type: String, unique: true, sparse: true },
     driverId: { type: String },
     userId: { type: String },
+    sender: { type: Schema.Types.ObjectId, ref: 'User' },
+    recipient: { type: Schema.Types.ObjectId, ref: 'User' },
+    contractId: { type: String, trim: true },
+    metadata: { type: Schema.Types.Mixed },
     trackingNumber: { type: String, unique: true, sparse: true },
     customer: { type: Schema.Types.Mixed },
     pickup: { type: Schema.Types.Mixed },

@@ -20,6 +20,7 @@ export interface IUser extends Document {
   role: UserRole;
   isActive: boolean;
   status: UserStatus;
+  walletAddress?: string;
   suspendedReason?: string;
   suspendedAt?: Date;
   createdAt: Date;
