@@ -21,6 +21,10 @@ httpServer.listen(PORT, () => {
   logger.info(`📦 ETA endpoint: http://localhost:${PORT}/api/v1/deliveries/:id/eta`);
 });
 
+if (process.env.NODE_ENV !== 'test') {
+  startEscrowMonitorJob();
+}
+
 const gracefulShutdown = (): void => {
   logger.info('Shutting down gracefully...');
   shutdownSocketServer(io)

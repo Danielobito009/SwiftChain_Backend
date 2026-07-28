@@ -37,6 +37,7 @@ export interface IDelivery extends Document {
 
 export enum DeliveryStatus {
   PENDING = 'pending',
+  FUNDED = 'funded',
   ASSIGNED = 'assigned',
   IN_PROGRESS = 'in_progress',
   COMPLETED = 'completed',
@@ -102,6 +103,22 @@ const DeliverySchema = new Schema<IDelivery>(
   },
   { timestamps: true, strict: false },
 );
+
+// ─── Indexes ────────────────────────────────────────────────────────────────
+// trackingNumber/deliveryId already get unique indexes from `unique: true` above.
+
+// GET /api/v1/deliveries: optional status filter, always sorted by createdAt desc
+// (src/services/delivery.service.ts#list). A leading createdAt-only match still
+// benefits unfiltered listing since it's an index prefix.
+DeliverySchema.index({ status: 1, createdAt: -1 });
+
+// GET /api/v1/deliveries?driver=...: optional driver filter, same sort
+// (src/services/delivery.service.ts#list).
+DeliverySchema.index({ driver: 1, createdAt: -1 });
+
+// GET /api/v1/deliveries/archived: exact match on isDeleted, sorted by deletedAt desc
+// (src/services/delivery.service.ts#listArchived).
+DeliverySchema.index({ isDeleted: 1, deletedAt: -1 });
 
 DeliverySchema.methods.softDelete = async function (
   this: IDelivery,
