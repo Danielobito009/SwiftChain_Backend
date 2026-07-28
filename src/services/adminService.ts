@@ -1,6 +1,7 @@
 import { StatusCodes } from 'http-status-codes';
 import mongoose from 'mongoose';
 import User from '../models/User';
+import Dispute, { DisputeStatus, IDispute } from '../models/Dispute';
 import { IUser, UserRole, UserStatus } from '../interfaces/IUser';
 import AppError from '../utils/AppError';
 import logger from '../config/logger';
@@ -86,3 +87,80 @@ export const suspendUser = async (input: SuspendUserInput): Promise<SuspendUserR
 
   return { user: targetUser, action: desiredStatus };
 };
+
+// ─── Disputes Service DTOs ───────────────────────────────────────────────────
+
+export interface GetAdminDisputesInput {
+  page?: number;
+  limit?: number;
+  status?: string;
+}
+
+export interface GetAdminDisputesResult {
+  disputes: IDispute[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
+/**
+ * Retrieves a paginated list of disputes for the admin dashboard.
+ *
+ * Filtering rules:
+ * - If no `status` filter is provided, defaults to active disputes (`open` & `under_review`).
+ * - If `status` is `'active'`, filters for active disputes (`open` & `under_review`).
+ * - If `status` is `'all'`, returns disputes across all statuses.
+ * - If `status` matches a specific `DisputeStatus` (e.g. `open`, `under_review`, `resolved`, `rejected`), filters by that status.
+ * - If `status` is invalid, throws a 400 Bad Request AppError.
+ */
+export const getAdminDisputes = async (
+  input: GetAdminDisputesInput,
+): Promise<GetAdminDisputesResult> => {
+  const page = Math.max(1, input.page ?? 1);
+  const limit = Math.min(100, Math.max(1, input.limit ?? 10));
+  const skip = (page - 1) * limit;
+
+  const queryFilter: Record<string, unknown> = {};
+
+  if (input.status) {
+    const statusLower = input.status.trim().toLowerCase();
+
+    if (statusLower === 'active') {
+      queryFilter.status = { $in: [DisputeStatus.OPEN, DisputeStatus.UNDER_REVIEW] };
+    } else if (statusLower === 'all') {
+      // No status restriction
+    } else if (Object.values(DisputeStatus).includes(statusLower as DisputeStatus)) {
+      queryFilter.status = statusLower;
+    } else {
+      const validStatuses = Object.values(DisputeStatus).join(', ');
+      throw new AppError(
+        `Invalid dispute status '${input.status}'. Allowed values: ${validStatuses}, active, all.`,
+        StatusCodes.BAD_REQUEST,
+      );
+    }
+  } else {
+    // Default filter when no status query parameter is supplied: active disputes
+    queryFilter.status = { $in: [DisputeStatus.OPEN, DisputeStatus.UNDER_REVIEW] };
+  }
+
+  const [disputes, total] = await Promise.all([
+    Dispute.find(queryFilter).sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
+    Dispute.countDocuments(queryFilter),
+  ]);
+
+  const totalPages = Math.ceil(total / limit) || 0;
+
+  return {
+    disputes,
+    pagination: {
+      total,
+      page,
+      limit,
+      totalPages,
+    },
+  };
+};
+

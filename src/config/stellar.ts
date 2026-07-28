@@ -1,4 +1,4 @@
-import { rpc as StellarRpc, Networks } from '@stellar/stellar-sdk';
+import { rpc as StellarRpc, BASE_FEE, Networks, StrKey } from '@stellar/stellar-sdk';
 import logger from './logger';
 
 /**
@@ -18,6 +18,18 @@ export interface StellarConfig {
   network: StellarNetwork;
   /** HTTP request timeout in milliseconds for RPC calls. */
   timeoutMs: number;
+  /**
+   * Soroban contract id (`C...`) of the SwiftChain escrow contract.
+   * Optional at boot so the API still starts without it; endpoints that need
+   * it fail with a clear 503 instead.
+   */
+  escrowContractId?: string;
+  /** Escrow contract function invoked to lock funds. */
+  escrowLockFunction: string;
+  /** Base fee (in stroops) used when building transactions. */
+  baseFee: string;
+  /** Validity window, in seconds, of generated unsigned transactions. */
+  transactionTimeoutSeconds: number;
 }
 
 // ─── Network passphrase map ────────────────────────────────────────────────────
@@ -67,7 +79,38 @@ function resolveStellarConfig(): StellarConfig {
     throw new Error('STELLAR_NETWORK_PASSPHRASE is required and could not be resolved.');
   }
 
-  return { rpcUrl, networkPassphrase, network, timeoutMs };
+  const escrowContractId = process.env.SOROBAN_ESCROW_CONTRACT_ID?.trim() || undefined;
+
+  if (escrowContractId && !StrKey.isValidContract(escrowContractId)) {
+    throw new Error(
+      `Invalid SOROBAN_ESCROW_CONTRACT_ID="${escrowContractId}". ` +
+        'Must be a valid Soroban contract id (starts with "C").',
+    );
+  }
+
+  const escrowLockFunction = process.env.SOROBAN_ESCROW_LOCK_FUNCTION?.trim() || 'lock_escrow';
+  const baseFee = process.env.STELLAR_BASE_FEE?.trim() || BASE_FEE;
+  const transactionTimeoutSeconds = parseInt(
+    process.env.STELLAR_TRANSACTION_TIMEOUT_SECONDS ?? '300',
+    10,
+  );
+
+  if (!Number.isInteger(transactionTimeoutSeconds) || transactionTimeoutSeconds <= 0) {
+    throw new Error(
+      'STELLAR_TRANSACTION_TIMEOUT_SECONDS must be a positive integer number of seconds.',
+    );
+  }
+
+  return {
+    rpcUrl,
+    networkPassphrase,
+    network,
+    timeoutMs,
+    escrowContractId,
+    escrowLockFunction,
+    baseFee,
+    transactionTimeoutSeconds,
+  };
 }
 
 // ─── Singleton config ──────────────────────────────────────────────────────────
