@@ -37,6 +37,7 @@ export interface IDelivery extends Document {
 
 export enum DeliveryStatus {
   PENDING = 'pending',
+  FUNDED = 'funded',
   ASSIGNED = 'assigned',
   IN_PROGRESS = 'in_progress',
   COMPLETED = 'completed',
