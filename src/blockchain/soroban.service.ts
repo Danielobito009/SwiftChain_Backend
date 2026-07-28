@@ -1,6 +1,8 @@
 import { rpc as StellarRpc } from '@stellar/stellar-sdk';
 import logger from '../config/logger';
 import { sorobanRpcClient, stellarConfig } from '../config/stellar';
+import env from '../config/env';
+import { withRetry, RetryOptions } from '../utils/rpcRetry';
 
 /**
  * Result returned by a successful connectivity check.
@@ -53,6 +55,27 @@ export class SorobanService {
   }
 
   /**
+   * Retry configuration derived from environment settings, shared by every
+   * RPC call this service makes.
+   */
+  private get retryOptions(): Pick<RetryOptions, 'maxAttempts' | 'baseDelayMs' | 'maxDelayMs'> {
+    return {
+      maxAttempts: env.SOROBAN_RPC_MAX_RETRIES,
+      baseDelayMs: env.SOROBAN_RPC_RETRY_BASE_MS,
+      maxDelayMs: env.SOROBAN_RPC_RETRY_MAX_MS,
+    };
+  }
+
+  /**
+   * Wrap a Soroban RPC call with exponential-backoff retry so transient
+   * failures (rate limiting, temporary node outages) are absorbed instead
+   * of propagating on the first failure.
+   */
+  private callWithRetry<T>(operationName: string, fn: () => Promise<T>): Promise<T> {
+    return withRetry(fn, { ...this.retryOptions, operationName });
+  }
+
+  /**
    * Perform a connectivity check against the Soroban RPC node.
    *
    * Calls `getHealth()` and `getLatestLedger()` in parallel. Both must
@@ -71,8 +94,8 @@ export class SorobanService {
 
     try {
       const [health, ledger] = await Promise.all([
-        this.client.getHealth(),
-        this.client.getLatestLedger(),
+        this.callWithRetry('getHealth', () => this.client.getHealth()),
+        this.callWithRetry('getLatestLedger', () => this.client.getLatestLedger()),
       ]);
 
       const latencyMs = Date.now() - start;
@@ -122,7 +145,7 @@ export class SorobanService {
    * @throws  If the RPC call fails.
    */
   public async getLatestLedger(): Promise<number> {
-    const ledger = await this.client.getLatestLedger();
+    const ledger = await this.callWithRetry('getLatestLedger', () => this.client.getLatestLedger());
     return ledger.sequence;
   }
 
@@ -132,7 +155,7 @@ export class SorobanService {
    * @returns The raw `getNetwork` response from the SDK.
    */
   public async getNetworkInfo(): Promise<StellarRpc.Api.GetNetworkResponse> {
-    return this.client.getNetwork();
+    return this.callWithRetry('getNetwork', () => this.client.getNetwork());
   }
 }
 
