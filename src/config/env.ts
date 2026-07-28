@@ -14,6 +14,9 @@ interface EnvConfig {
   CORS_ORIGIN: string;
   RATE_LIMIT_WINDOW_MS: number;
   RATE_LIMIT_MAX_REQUESTS: number;
+  INDEXER_LAG_ALERT_THRESHOLD: number;
+  INDEXER_LAG_CHECK_INTERVAL_MS: number;
+  INDEXER_LAG_WEBHOOK_URL: string;
 }
 
 const envSchema = z.object({
@@ -27,6 +30,9 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('*'),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(900000),
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().min(1).default(100),
+  INDEXER_LAG_ALERT_THRESHOLD: z.coerce.number().int().min(1).default(50),
+  INDEXER_LAG_CHECK_INTERVAL_MS: z.coerce.number().int().min(1000).default(60000),
+  INDEXER_LAG_WEBHOOK_URL: z.string().default(''),
 });
 
 let env: EnvConfig;
