@@ -7,6 +7,8 @@ import {
   shutdownSocketServer,
   TypedServer,
 } from './sockets/connectionHandler';
+import { startEscrowMonitorJob, stopEscrowMonitorJob } from './jobs/escrowMonitor';
+import { startEventPoller, stopEventPoller } from './services/eventPoller';
 
 dotenv.config();
 
@@ -23,10 +25,13 @@ httpServer.listen(PORT, () => {
 
 if (process.env.NODE_ENV !== 'test') {
   startEscrowMonitorJob();
+  startEventPoller();
 }
 
 const gracefulShutdown = (): void => {
   logger.info('Shutting down gracefully...');
+  stopEventPoller();
+  stopEscrowMonitorJob();
   shutdownSocketServer(io)
     .catch((error) => logger.error('Error shutting down Socket.IO server:', error))
     .finally(() => process.exit(0));

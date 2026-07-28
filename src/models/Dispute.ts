@@ -20,7 +20,7 @@ export interface IDispute extends Document {
   raisedBy: string;
   reason: DisputeReason;
   description: string;
-  evidenceUrls?: string[];
+  evidenceUrls: string[];
   status: DisputeStatus;
   raisedAtLedger?: number;
   resolvedAt?: Date;
@@ -40,7 +40,7 @@ const DisputeSchema = new Schema<IDispute>(
       required: true,
     },
     description: { type: String, required: true },
-    evidenceUrls: { type: [String], default: undefined },
+    evidenceUrls: { type: [String], default: () => [] },
     status: {
       type: String,
       enum: Object.values(DisputeStatus),
@@ -54,6 +54,10 @@ const DisputeSchema = new Schema<IDispute>(
   },
   { timestamps: true },
 );
+
+DisputeSchema.index({ deliveryId: 1, status: 1 });
+DisputeSchema.index({ raisedBy: 1, createdAt: -1 });
+DisputeSchema.index({ status: 1, createdAt: -1 });
 
 const Dispute = mongoose.model<IDispute>('Dispute', DisputeSchema);
 

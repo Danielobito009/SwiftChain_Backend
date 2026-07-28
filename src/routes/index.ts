@@ -5,6 +5,7 @@ import deliveryStatusRoutes from './deliveries';
 import adminRoutes from './adminRoutes';
 import driverRoutes from './driverRoutes';
 import fleetRoutes from './fleetRoutes';
+import disputeRoutes from './disputeRoutes';
 
 const router = Router();
 
@@ -14,5 +15,6 @@ router.use('/v1/deliveries', deliveryStatusRoutes);
 router.use('/v1/admin', adminRoutes);
 router.use('/v1/drivers', driverRoutes);
 router.use('/v1/fleets', fleetRoutes);
+router.use('/v1/disputes', disputeRoutes);
 
 export default router;
