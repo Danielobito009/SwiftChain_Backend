@@ -14,6 +14,9 @@ interface EnvConfig {
   CORS_ORIGIN: string;
   RATE_LIMIT_WINDOW_MS: number;
   RATE_LIMIT_MAX_REQUESTS: number;
+  SOROBAN_RPC_MAX_RETRIES: number;
+  SOROBAN_RPC_RETRY_BASE_MS: number;
+  SOROBAN_RPC_RETRY_MAX_MS: number;
 }
 
 const envSchema = z.object({
@@ -27,6 +30,9 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('*'),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(900000),
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().min(1).default(100),
+  SOROBAN_RPC_MAX_RETRIES: z.coerce.number().int().min(1).max(10).default(5),
+  SOROBAN_RPC_RETRY_BASE_MS: z.coerce.number().int().min(1).default(250),
+  SOROBAN_RPC_RETRY_MAX_MS: z.coerce.number().int().min(1).default(8000),
 });
 
 let env: EnvConfig;
