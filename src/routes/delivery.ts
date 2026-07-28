@@ -4,7 +4,7 @@ import {
   getDeliveries,
   getDeliveryById,
   assignDriver,
-} from '../controllers/deliveryController';
+} from '../controllers/deliveryCrudController';
 
 const router = Router();
 
