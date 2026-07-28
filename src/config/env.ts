@@ -50,4 +50,10 @@ try {
   process.exit(1);
 }
 
+if (env.UPLOAD_STORAGE_DRIVER === 's3' && !env.AWS_S3_BUCKET) {
+  // eslint-disable-next-line no-console
+  console.error('❌ AWS_S3_BUCKET is required when UPLOAD_STORAGE_DRIVER=s3');
+  process.exit(1);
+}
+
 export default env;

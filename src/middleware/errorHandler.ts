@@ -72,6 +72,8 @@ const errorHandler = (
     error = new AppError('Validation failed', 400);
   } else if (err instanceof AppError) {
     error = err;
+  } else if (err.name === 'MulterError') {
+    error = new AppError(`File upload error: ${err.message}`, 400);
   } else if (err.name === 'JsonWebTokenError') {
     error = new AppError('Invalid token', 401);
   } else if (err.name === 'TokenExpiredError') {

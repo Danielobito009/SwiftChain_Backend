@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import logger from '../config/logger';
 import DriverProfile from '../models/DriverProfile';
 import { computeTier } from '../interfaces/IDriverProfile';
+import { recordProcessedLedger } from '../services/monitorService';
 
 /**
  * Parsed representation of a reputation event emitted by the Soroban contract.
@@ -151,5 +152,10 @@ export async function dispatchReputationEvent(
       break;
     default:
       logger.warn('[reputationHandlers] unknown event type, ignoring', { eventType });
+      return;
+  }
+
+  if (typeof event.ledgerSequence === 'number') {
+    await recordProcessedLedger(event.ledgerSequence);
   }
 }
