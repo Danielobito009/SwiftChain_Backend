@@ -14,6 +14,7 @@ interface EnvConfig {
   CORS_ORIGIN: string;
   RATE_LIMIT_WINDOW_MS: number;
   RATE_LIMIT_MAX_REQUESTS: number;
+  DISPUTE_NOTIFICATION_WEBHOOK_URL: string;
 }
 
 const envSchema = z.object({
@@ -27,6 +28,7 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('*'),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(900000),
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().min(1).default(100),
+  DISPUTE_NOTIFICATION_WEBHOOK_URL: z.string().default(''),
 });
 
 let env: EnvConfig;
