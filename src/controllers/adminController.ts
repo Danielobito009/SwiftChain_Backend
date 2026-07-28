@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { StatusCodes } from 'http-status-codes';
-import { suspendUser as suspendUserService } from '../services/adminService';
+import {
+  suspendUser as suspendUserService,
+  getAdminDisputes as getAdminDisputesService,
+} from '../services/adminService';
 import type { IUser } from '../interfaces/IUser';
 import AppError from '../utils/AppError';
 
@@ -66,3 +69,58 @@ export const suspendUser = async (
     next(error);
   }
 };
+
+/**
+ * GET /api/v1/admin/disputes
+ *
+ * Retrieves a paginated list of disputes for the admin dashboard.
+ * Supports pagination (`page`, `limit`) and filtering by `status` (open, under_review, resolved, rejected, active, all).
+ * Protected by `authenticate` + `requireRole(UserRole.ADMIN)`.
+ */
+export const getDisputes = async (
+  req: Request<unknown, unknown, unknown, { page?: string; limit?: string; status?: string }>,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const adminUser = (req as Request & { user?: IUser }).user;
+
+    if (!adminUser) {
+      throw new AppError('Authentication required.', StatusCodes.UNAUTHORIZED);
+    }
+
+    const { page: rawPage, limit: rawLimit, status } = req.query;
+
+    let page = 1;
+    let limit = 10;
+
+    if (rawPage !== undefined && rawPage !== '') {
+      page = Number(rawPage);
+      if (!Number.isInteger(page) || page < 1) {
+        throw new AppError('Page must be a positive integer.', StatusCodes.BAD_REQUEST);
+      }
+    }
+
+    if (rawLimit !== undefined && rawLimit !== '') {
+      limit = Number(rawLimit);
+      if (!Number.isInteger(limit) || limit < 1) {
+        throw new AppError('Limit must be a positive integer.', StatusCodes.BAD_REQUEST);
+      }
+    }
+
+    const result = await getAdminDisputesService({
+      page,
+      limit,
+      status: status !== undefined ? String(status) : undefined,
+    });
+
+    res.status(StatusCodes.OK).json({
+      status: 'success',
+      data: result.disputes,
+      pagination: result.pagination,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
