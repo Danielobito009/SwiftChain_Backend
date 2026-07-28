@@ -7,12 +7,21 @@ export enum ReputationTier {
   PLATINUM = 'platinum',
 }
 
+export interface IVehicleDetails {
+  make: string;
+  model: string;
+  year?: number;
+  plateNumber: string;
+  capacityKg?: number;
+}
+
 export interface IDriverProfile extends Document {
   userId: Types.ObjectId;
   reputationPoints: number;
   tier: ReputationTier;
   totalDeliveries: number;
   completedDeliveries: number;
+  vehicleDetails?: IVehicleDetails;
   createdAt: Date;
   updatedAt: Date;
 }
