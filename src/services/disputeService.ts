@@ -5,44 +5,24 @@ import Delivery, { DeliveryStatus } from '../models/Delivery';
 import { sorobanService } from '../blockchain/soroban.service';
 import AppError from '../utils/AppError';
 import logger from '../config/logger';
+import type {
+  CreateDisputeInput,
+  ResolveDisputeInput,
+  AddEvidenceInput,
+  UpdateDisputeInput,
+  DisputeFilter,
+} from '../validators/disputeValidator';
 
-// ─── Constants ──────────────────────────────────────────────────────────────────
-
-/**
- * Delivery states considered "active" — i.e. a delivery that is actually
- * underway and can still be disputed. Deliveries that have not yet been
- * assigned, or that have already completed/cancelled, are not eligible.
- */
 const ACTIVE_DELIVERY_STATUSES: DeliveryStatus[] = [
   DeliveryStatus.ASSIGNED,
   DeliveryStatus.IN_PROGRESS,
 ];
 
-// ─── DTOs ──────────────────────────────────────────────────────────────────────
+const populateOptions = [
+  { path: 'raisedBy', select: 'firstName lastName email' },
+  { path: 'deliveryId', select: 'deliveryId status userId driverId' },
+];
 
-export interface CreateDisputeInput {
-  deliveryId: string;
-  raisedBy: string;
-  reason: DisputeReason;
-  description: string;
-  evidenceUrls?: string[];
-}
-
-// ─── Service ───────────────────────────────────────────────────────────────────
-
-/**
- * Opens a delivery dispute prior to any on-chain dispute workflow.
- *
- * Business rules enforced here:
- *  - The referenced delivery must exist.
- *  - The delivery must currently be in an active state (assigned or
- *    in-progress) — pending, completed, and cancelled deliveries cannot be
- *    disputed.
- *  - Only a participant in the delivery (the customer or the assigned
- *    driver) may open a dispute against it.
- *  - A delivery may not have more than one open (unresolved) dispute at a
- *    time.
- */
 export const createDispute = async (input: CreateDisputeInput): Promise<IDispute> => {
   const { deliveryId, raisedBy, reason, description, evidenceUrls } = input;
 
@@ -102,6 +82,165 @@ export const createDispute = async (input: CreateDisputeInput): Promise<IDispute
   logger.info(
     `[Dispute] User ${raisedBy} opened dispute ${dispute._id} for delivery ${deliveryId}`,
   );
+
+  return dispute;
+};
+
+export const getDisputeById = async (id: string): Promise<IDispute> => {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new AppError('Invalid dispute ID format.', StatusCodes.BAD_REQUEST);
+  }
+
+  const dispute = await Dispute.findById(id).populate(populateOptions);
+  if (!dispute) {
+    throw new AppError('Dispute not found.', StatusCodes.NOT_FOUND);
+  }
+
+  return dispute;
+};
+
+export const getDisputes = async (filters: DisputeFilter) => {
+  const { status, raisedBy, deliveryId, reason, page = 1, limit = 10 } = filters;
+  const query: Record<string, unknown> = {};
+
+  if (status) {
+    query.status = status;
+  }
+
+  if (raisedBy) {
+    if (!mongoose.Types.ObjectId.isValid(raisedBy)) {
+      throw new AppError('Invalid raisedBy format.', StatusCodes.BAD_REQUEST);
+    }
+    query.raisedBy = raisedBy;
+  }
+
+  if (deliveryId) {
+    if (!mongoose.Types.ObjectId.isValid(deliveryId)) {
+      throw new AppError('Invalid deliveryId format.', StatusCodes.BAD_REQUEST);
+    }
+    query.deliveryId = deliveryId;
+  }
+
+  if (reason) {
+    if (!Object.values(DisputeReason).includes(reason)) {
+      throw new AppError('Invalid dispute reason.', StatusCodes.BAD_REQUEST);
+    }
+    query.reason = reason;
+  }
+
+  const skip = (page - 1) * limit;
+  const [data, total] = await Promise.all([
+    Dispute.find(query)
+      .populate(populateOptions)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .exec(),
+    Dispute.countDocuments(query).exec(),
+  ]);
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  };
+};
+
+export const resolveDispute = async (
+  id: string,
+  input: ResolveDisputeInput,
+): Promise<IDispute> => {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new AppError('Invalid dispute ID format.', StatusCodes.BAD_REQUEST);
+  }
+
+  const dispute = await Dispute.findById(id);
+  if (!dispute) {
+    throw new AppError('Dispute not found.', StatusCodes.NOT_FOUND);
+  }
+
+  if (dispute.status === DisputeStatus.RESOLVED || dispute.status === DisputeStatus.REJECTED) {
+    throw new AppError(
+      `Dispute is already ${dispute.status} and cannot be resolved again.`,
+      StatusCodes.CONFLICT,
+    );
+  }
+
+  if (input.status === DisputeStatus.RESOLVED && !input.resolutionNotes) {
+    throw new AppError(
+      'resolutionNotes are required when resolving a dispute.',
+      StatusCodes.UNPROCESSABLE_ENTITY,
+    );
+  }
+
+  dispute.status = input.status;
+  dispute.resolutionNotes = input.resolutionNotes;
+  dispute.resolvedBy = input.resolvedBy;
+  dispute.resolvedAt = new Date();
+
+  await dispute.save();
+
+  logger.info(
+    `[Dispute] Dispute ${id} updated to status '${input.status}' by ${input.resolvedBy}`,
+  );
+
+  return dispute;
+};
+
+export const addEvidence = async (id: string, input: AddEvidenceInput): Promise<IDispute> => {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new AppError('Invalid dispute ID format.', StatusCodes.BAD_REQUEST);
+  }
+
+  const dispute = await Dispute.findById(id);
+  if (!dispute) {
+    throw new AppError('Dispute not found.', StatusCodes.NOT_FOUND);
+  }
+
+  if (dispute.status === DisputeStatus.RESOLVED || dispute.status === DisputeStatus.REJECTED) {
+    throw new AppError('Evidence cannot be added to a resolved or rejected dispute.', StatusCodes.CONFLICT);
+  }
+
+  const existingUrls = dispute.evidenceUrls || [];
+  const newUrls = input.evidenceUrls.filter((url) => !existingUrls.includes(url));
+  dispute.evidenceUrls = [...existingUrls, ...newUrls];
+
+  await dispute.save();
+
+  logger.info(`[Dispute] ${newUrls.length} evidence URLs added to dispute ${id}`);
+
+  return dispute;
+};
+
+export const updateDispute = async (id: string, input: UpdateDisputeInput): Promise<IDispute> => {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new AppError('Invalid dispute ID format.', StatusCodes.BAD_REQUEST);
+  }
+
+  const dispute = await Dispute.findById(id);
+  if (!dispute) {
+    throw new AppError('Dispute not found.', StatusCodes.NOT_FOUND);
+  }
+
+  if (dispute.status === DisputeStatus.RESOLVED || dispute.status === DisputeStatus.REJECTED) {
+    throw new AppError('A resolved or rejected dispute cannot be modified.', StatusCodes.CONFLICT);
+  }
+
+  if (input.reason !== undefined) {
+    dispute.reason = input.reason;
+  }
+  if (input.description !== undefined) {
+    dispute.description = input.description;
+  }
+  if (input.evidenceUrls !== undefined) {
+    dispute.evidenceUrls = input.evidenceUrls;
+  }
+
+  await dispute.save();
+
+  logger.info(`[Dispute] Dispute ${id} updated`);
 
   return dispute;
 };
