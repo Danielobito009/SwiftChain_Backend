@@ -32,6 +32,16 @@ const deliverySchema = new Schema<DeliveryDocument>(
   },
 );
 
+// ─── Indexes ────────────────────────────────────────────────────────────────
+// Status is looked up and transitioned on every PUT /api/v1/deliveries/:id/status
+// call (src/controllers/deliveryStatusController.ts); a single-field index
+// supports filtering/listing deliveries by their current status.
+deliverySchema.index({ status: 1 });
+
+// Supports the natural "a driver's assigned deliveries" access pattern once a
+// driver-facing listing endpoint queries this collection by assignedDriver.
+deliverySchema.index({ assignedDriver: 1 });
+
 export const Delivery =
   (mongoose.models.DeliveryLegacy as Model<DeliveryDocument>) ||
   mongoose.model<DeliveryDocument>('DeliveryLegacy', deliverySchema);
