@@ -2,6 +2,7 @@ import { StatusCodes } from 'http-status-codes';
 import mongoose from 'mongoose';
 import Fleet from '../models/Fleet';
 import FleetInvitation from '../models/FleetInvitation';
+import Delivery from '../models/Delivery';
 import User from '../models/User';
 import { UserRole } from '../interfaces/IUser';
 import { IFleet, IFleetInvitation, FleetInvitationStatus } from '../interfaces/IFleet';
@@ -18,6 +19,20 @@ export interface InviteDriverInput {
   fleetId: string;
   driverId: string;
   invitedBy: string;
+}
+
+export interface RespondToInvitationInput {
+  invitationId: string;
+  driverId: string;
+  accept: boolean;
+}
+
+export interface FleetMetrics {
+  fleetId: string;
+  driverCount: number;
+  totalDeliveries: number;
+  completedDeliveries: number;
+  totalEscrowValue: number;
 }
 
 // ─── Service ───────────────────────────────────────────────────────────────────
@@ -124,12 +139,6 @@ export const inviteDriver = async (input: InviteDriverInput): Promise<IFleetInvi
  * invitation is marked accepted. On decline: only the invitation status
  * changes.
  */
-export interface RespondToInvitationInput {
-  invitationId: string;
-  driverId: string;
-  accept: boolean;
-}
-
 export const respondToInvitation = async (
   input: RespondToInvitationInput,
 ): Promise<IFleetInvitation> => {
@@ -169,4 +178,66 @@ export const respondToInvitation = async (
   }
 
   return invitation;
+};
+
+/**
+ * Aggregates delivery and revenue statistics for a fleet.
+ *
+ * Delivery.driverId is stored as a plain string (not a Mongoose ref), so
+ * fleet drivers' ObjectIds are compared as strings when matching deliveries.
+ */
+export const getFleetMetrics = async (
+  fleetId: string,
+  requesterId: string,
+): Promise<FleetMetrics> => {
+  if (!mongoose.Types.ObjectId.isValid(fleetId)) {
+    throw new AppError('Invalid fleet ID format.', StatusCodes.BAD_REQUEST);
+  }
+
+  const fleet = await Fleet.findById(fleetId);
+  if (!fleet) {
+    throw new AppError('Fleet not found.', StatusCodes.NOT_FOUND);
+  }
+
+  if (fleet.ownerId.toString() !== requesterId) {
+    throw new AppError('Only the fleet owner can view fleet metrics.', StatusCodes.FORBIDDEN);
+  }
+
+  const driverIds = fleet.drivers.map((id) => id.toString());
+
+  if (driverIds.length === 0) {
+    return {
+      fleetId,
+      driverCount: 0,
+      totalDeliveries: 0,
+      completedDeliveries: 0,
+      totalEscrowValue: 0,
+    };
+  }
+
+  const [totals] = await Delivery.aggregate<{
+    totalDeliveries: number;
+    completedDeliveries: number;
+    totalEscrowValue: number;
+  }>([
+    { $match: { driverId: { $in: driverIds } } },
+    {
+      $group: {
+        _id: null,
+        totalDeliveries: { $sum: 1 },
+        completedDeliveries: {
+          $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] },
+        },
+        totalEscrowValue: { $sum: { $ifNull: ['$escrowAmount', 0] } },
+      },
+    },
+  ]);
+
+  return {
+    fleetId,
+    driverCount: driverIds.length,
+    totalDeliveries: totals?.totalDeliveries ?? 0,
+    completedDeliveries: totals?.completedDeliveries ?? 0,
+    totalEscrowValue: totals?.totalEscrowValue ?? 0,
+  };
 };

@@ -6,6 +6,7 @@ import app from '../src/app';
 import User from '../src/models/User';
 import Fleet from '../src/models/Fleet';
 import FleetInvitation from '../src/models/FleetInvitation';
+import Delivery from '../src/models/Delivery';
 import { UserRole, UserStatus } from '../src/interfaces/IUser';
 import { FleetInvitationStatus } from '../src/interfaces/IFleet';
 
@@ -540,6 +541,130 @@ describe('PATCH /api/v1/fleets/invitations/:invitationId', () => {
         .send({ accept: false });
 
       expect(res.status).toBe(409);
+    });
+  });
+});
+
+// ─── GET /api/v1/fleets/:id/metrics ─────────────────────────────────────────────
+
+describe('GET /api/v1/fleets/:id/metrics', () => {
+  describe('200 – successful metrics', () => {
+    it('returns zeroed metrics for a fleet with no drivers', async () => {
+      const owner = await createUser({ role: UserRole.ENTERPRISE });
+      const token = signToken(owner._id.toString());
+      const fleet = await Fleet.create({ name: 'Empty Fleet', ownerId: owner._id });
+
+      const res = await request(app)
+        .get(`/api/v1/fleets/${fleet._id}/metrics`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.metrics).toEqual({
+        fleetId: fleet._id.toString(),
+        driverCount: 0,
+        totalDeliveries: 0,
+        completedDeliveries: 0,
+        totalEscrowValue: 0,
+      });
+    });
+
+    it('aggregates delivery counts and escrow values across fleet drivers', async () => {
+      const owner = await createUser({ role: UserRole.ENTERPRISE });
+      const driverA = await createUser({ role: UserRole.DRIVER });
+      const driverB = await createUser({ role: UserRole.DRIVER });
+      const token = signToken(owner._id.toString());
+      const fleet = await Fleet.create({
+        name: 'Metrics Fleet',
+        ownerId: owner._id,
+        drivers: [driverA._id, driverB._id],
+      });
+
+      await Delivery.create({
+        driverId: driverA._id.toString(),
+        userId: 'customer-1',
+        status: 'completed',
+        escrowAmount: 100,
+        pickupCoordinates: { lat: 0, lng: 0, address: 'a' },
+        dropoffCoordinates: { lat: 1, lng: 1, address: 'b' },
+      });
+      await Delivery.create({
+        driverId: driverA._id.toString(),
+        userId: 'customer-2',
+        status: 'in_progress',
+        escrowAmount: 50,
+        pickupCoordinates: { lat: 0, lng: 0, address: 'a' },
+        dropoffCoordinates: { lat: 1, lng: 1, address: 'b' },
+      });
+      await Delivery.create({
+        driverId: driverB._id.toString(),
+        userId: 'customer-3',
+        status: 'completed',
+        escrowAmount: 75,
+        pickupCoordinates: { lat: 0, lng: 0, address: 'a' },
+        dropoffCoordinates: { lat: 1, lng: 1, address: 'b' },
+      });
+      // Delivery by a driver NOT in this fleet — must not be counted.
+      const outsideDriver = await createUser({ role: UserRole.DRIVER });
+      await Delivery.create({
+        driverId: outsideDriver._id.toString(),
+        userId: 'customer-4',
+        status: 'completed',
+        escrowAmount: 9999,
+        pickupCoordinates: { lat: 0, lng: 0, address: 'a' },
+        dropoffCoordinates: { lat: 1, lng: 1, address: 'b' },
+      });
+
+      const res = await request(app)
+        .get(`/api/v1/fleets/${fleet._id}/metrics`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.metrics.driverCount).toBe(2);
+      expect(res.body.data.metrics.totalDeliveries).toBe(3);
+      expect(res.body.data.metrics.completedDeliveries).toBe(2);
+      expect(res.body.data.metrics.totalEscrowValue).toBe(225);
+    });
+  });
+
+  describe('403 – authorisation errors', () => {
+    it('returns 403 when a non-owner tries to view fleet metrics', async () => {
+      const owner = await createUser({ role: UserRole.ENTERPRISE });
+      const otherEnterprise = await createUser({ role: UserRole.ENTERPRISE });
+      const token = signToken(otherEnterprise._id.toString());
+      const fleet = await Fleet.create({ name: 'Private Metrics Fleet', ownerId: owner._id });
+
+      const res = await request(app)
+        .get(`/api/v1/fleets/${fleet._id}/metrics`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+    });
+
+    it('returns 403 when a driver tries to view fleet metrics', async () => {
+      const owner = await createUser({ role: UserRole.ENTERPRISE });
+      const driver = await createUser({ role: UserRole.DRIVER });
+      const token = signToken(driver._id.toString());
+      const fleet = await Fleet.create({ name: 'Driver Blocked Fleet', ownerId: owner._id });
+
+      const res = await request(app)
+        .get(`/api/v1/fleets/${fleet._id}/metrics`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+    });
+  });
+
+  describe('404 – not found', () => {
+    it('returns 404 when the fleet does not exist', async () => {
+      const owner = await createUser({ role: UserRole.ENTERPRISE });
+      const token = signToken(owner._id.toString());
+      const nonExistentFleetId = new mongoose.Types.ObjectId().toString();
+
+      const res = await request(app)
+        .get(`/api/v1/fleets/${nonExistentFleetId}/metrics`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
     });
   });
 });

@@ -1,7 +1,12 @@
 import { Router } from 'express';
 import authenticate from '../middleware/authenticate';
 import requireRole from '../middleware/requireRole';
-import { createFleet, inviteDriver, respondToInvitation } from '../controllers/fleetController';
+import {
+  createFleet,
+  inviteDriver,
+  respondToInvitation,
+  getFleetMetrics,
+} from '../controllers/fleetController';
 import { UserRole } from '../interfaces/IUser';
 
 const router = Router();
@@ -29,5 +34,12 @@ router.post('/:id/invite', requireRole(UserRole.ENTERPRISE), inviteDriver);
  * @access  Driver only
  */
 router.patch('/invitations/:invitationId', requireRole(UserRole.DRIVER), respondToInvitation);
+
+/**
+ * @route   GET /api/v1/fleets/:id/metrics
+ * @desc    Aggregated delivery and revenue statistics for a fleet
+ * @access  Enterprise only (must be the fleet owner)
+ */
+router.get('/:id/metrics', requireRole(UserRole.ENTERPRISE), getFleetMetrics);
 
 export default router;

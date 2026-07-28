@@ -4,6 +4,7 @@ import {
   createFleet as createFleetService,
   inviteDriver as inviteDriverService,
   respondToInvitation as respondToInvitationService,
+  getFleetMetrics as getFleetMetricsService,
 } from '../services/fleetService';
 import type { IUser } from '../interfaces/IUser';
 import AppError from '../utils/AppError';
@@ -148,6 +149,36 @@ export const respondToInvitation = async (
       status: 'success',
       message: `Invitation ${invitation.status} successfully.`,
       data: { invitation },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/v1/fleets/:id/metrics
+ *
+ * Returns aggregated delivery and revenue statistics for a fleet. Protected
+ * by `authenticate` + `requireRole(UserRole.ENTERPRISE)`; ownership is
+ * additionally enforced in the service layer.
+ */
+export const getFleetMetrics = async (
+  req: Request<{ id: string }>,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const owner = (req as Request & { user?: IUser }).user;
+    if (!owner) {
+      throw new AppError('Authentication required.', StatusCodes.UNAUTHORIZED);
+    }
+
+    const { id: fleetId } = req.params;
+    const metrics = await getFleetMetricsService(fleetId, owner._id.toString());
+
+    res.status(StatusCodes.OK).json({
+      status: 'success',
+      data: { metrics },
     });
   } catch (error) {
     next(error);
