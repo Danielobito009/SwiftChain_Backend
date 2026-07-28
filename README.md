@@ -124,6 +124,12 @@ The backend serves as the central hub connecting the frontend, database, and blo
 - `POST /shipments` - Create a shipment record.
 - `GET /shipments` - Get shipment details.
 
+### Escrow
+
+- `GET /api/v1/escrow/delivery/:id` - Fetch the escrow record (locking state, amount, asset,
+  contract id, on-chain transaction hashes) associated with a delivery. `:id` accepts either the
+  delivery `_id` or its business `deliveryId`.
+  
 ### Transactions
 
 - `POST /api/v1/transactions/escrow-lock` - Build the unsigned, simulation-prepared Soroban XDR
