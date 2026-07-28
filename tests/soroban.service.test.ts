@@ -36,6 +36,16 @@ jest.mock('../src/config/stellar', () => ({
   createSorobanRpcClient: jest.fn(),
 }));
 
+// Keep retry backoff delays effectively instant so retry tests run fast.
+jest.mock('../src/config/env', () => ({
+  __esModule: true,
+  default: {
+    SOROBAN_RPC_MAX_RETRIES: 3,
+    SOROBAN_RPC_RETRY_BASE_MS: 1,
+    SOROBAN_RPC_RETRY_MAX_MS: 2,
+  },
+}));
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Build a minimal mock of rpc.Server with controllable method responses. */
@@ -198,6 +208,34 @@ describe('SorobanService', () => {
       const service = new SorobanService(client);
 
       await expect(service.getNetworkInfo()).rejects.toThrow('network error');
+    });
+  });
+
+  // ── retry / backoff behaviour ──────────────────────────────────────────────
+
+  describe('retry on transient RPC failures', () => {
+    it('retries getLatestLedger and succeeds once the node recovers', async () => {
+      const getLatestLedger = jest
+        .fn()
+        .mockRejectedValueOnce(new Error('429 rate limited'))
+        .mockResolvedValue({ sequence: 999, id: 'xyz', protocolVersion: 21 });
+      const client = makeMockClient({ getLatestLedger });
+      const service = new SorobanService(client);
+
+      const seq = await service.getLatestLedger();
+
+      expect(seq).toBe(999);
+      expect(getLatestLedger).toHaveBeenCalledTimes(2);
+    });
+
+    it('gives up and throws after exhausting configured retry attempts', async () => {
+      const getNetwork = jest.fn().mockRejectedValue(new Error('ECONNRESET'));
+      const client = makeMockClient({ getNetwork });
+      const service = new SorobanService(client);
+
+      await expect(service.getNetworkInfo()).rejects.toThrow('ECONNRESET');
+      // SOROBAN_RPC_MAX_RETRIES is mocked to 3 attempts total.
+      expect(getNetwork).toHaveBeenCalledTimes(3);
     });
   });
 });
