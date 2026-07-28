@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
+import swaggerUi from 'swagger-ui-express';
 
 import routes from './routes';
 import logger from './config/logger';
@@ -13,6 +14,7 @@ import { connectDatabase } from './config/database';
 import errorHandler from './middleware/errorHandler';
 import requestLogger from './middleware/requestLogger';
 import env from './config/env';
+import swaggerSpec from './docs/swagger';
 
 dotenv.config();
 
@@ -25,6 +27,23 @@ app.set('trust proxy', 1);
 app.use(helmet());
 app.use(compression());
 app.use(requestLogger);
+
+// Swagger UI needs inline <script>/<style>, which the default Helmet CSP
+// blocks, so it gets its own relaxed CSP scoped to /api-docs only — the
+// rest of the API keeps the strict default policy from helmet() above.
+app.use(
+  '/api-docs',
+  helmet.contentSecurityPolicy({
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      'script-src': ["'self'", "'unsafe-inline'"],
+      'style-src': ["'self'", "'unsafe-inline'"],
+      'img-src': ["'self'", 'data:'],
+    },
+  }),
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec),
+);
 
 // CORS configuration
 app.use(

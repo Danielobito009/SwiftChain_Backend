@@ -50,6 +50,13 @@ const userSchema = new Schema<IUser>(
       type: Boolean,
       default: true,
     },
+    walletAddress: {
+      type: String,
+      trim: true,
+      unique: true,
+      sparse: true,
+      match: [/^G[A-Z2-7]{55}$/, 'Please provide a valid Stellar public key'],
+    },
   },
   {
     timestamps: true,
@@ -86,8 +93,14 @@ userSchema.methods.comparePassword = async function (candidatePassword: string):
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-// Index for efficient email lookups
+// Index for efficient email lookups (login, registration duplicate checks).
 userSchema.index({ email: 1 });
+
+// Every authenticated request checks role (src/middleware/auth.ts#authorize,
+// src/middleware/requireRole.ts) and account status (src/middleware/authenticate.ts
+// blocks suspended/banned accounts); this compound index supports filtering
+// users by role and/or status, e.g. an admin listing all suspended drivers.
+userSchema.index({ role: 1, status: 1 });
 
 const User = mongoose.model<IUser>('User', userSchema);
 

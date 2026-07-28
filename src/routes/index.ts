@@ -4,7 +4,7 @@ import deliveryCrudRoutes from './delivery.routes';
 import deliveryStatusRoutes from './deliveries';
 import adminRoutes from './adminRoutes';
 import driverRoutes from './driverRoutes';
-import uploadRoutes from './uploadRoutes';
+import fleetRoutes from './fleetRoutes';
 
 const router = Router();
 
@@ -13,6 +13,6 @@ router.use('/v1/deliveries', deliveryCrudRoutes);
 router.use('/v1/deliveries', deliveryStatusRoutes);
 router.use('/v1/admin', adminRoutes);
 router.use('/v1/drivers', driverRoutes);
-router.use('/v1/uploads', uploadRoutes);
+router.use('/v1/fleets', fleetRoutes);
 
 export default router;

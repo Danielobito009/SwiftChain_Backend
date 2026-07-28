@@ -4,6 +4,7 @@ export enum UserRole {
   USER = 'user',
   DRIVER = 'driver',
   ADMIN = 'admin',
+  ENTERPRISE = 'enterprise',
 }
 
 export enum UserStatus {
@@ -20,6 +21,7 @@ export interface IUser extends Document {
   role: UserRole;
   isActive: boolean;
   status: UserStatus;
+  walletAddress?: string;
   suspendedReason?: string;
   suspendedAt?: Date;
   createdAt: Date;
