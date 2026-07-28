@@ -1,0 +1,61 @@
+import mongoose, { Schema, Document } from 'mongoose';
+
+export enum DisputeReason {
+  DAMAGED_PACKAGE = 'damaged_package',
+  LATE_DELIVERY = 'late_delivery',
+  WRONG_ITEM = 'wrong_item',
+  NON_DELIVERY = 'non_delivery',
+  OTHER = 'other',
+}
+
+export enum DisputeStatus {
+  OPEN = 'open',
+  UNDER_REVIEW = 'under_review',
+  RESOLVED = 'resolved',
+  REJECTED = 'rejected',
+}
+
+export interface IDispute extends Document {
+  deliveryId: string;
+  raisedBy: string;
+  reason: DisputeReason;
+  description: string;
+  evidenceUrls?: string[];
+  status: DisputeStatus;
+  raisedAtLedger?: number;
+  resolvedAt?: Date;
+  resolvedBy?: string;
+  resolutionNotes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const DisputeSchema = new Schema<IDispute>(
+  {
+    deliveryId: { type: String, required: true, index: true },
+    raisedBy: { type: String, required: true, index: true },
+    reason: {
+      type: String,
+      enum: Object.values(DisputeReason),
+      required: true,
+    },
+    description: { type: String, required: true },
+    evidenceUrls: { type: [String], default: undefined },
+    status: {
+      type: String,
+      enum: Object.values(DisputeStatus),
+      default: DisputeStatus.OPEN,
+      index: true,
+    },
+    raisedAtLedger: { type: Number },
+    resolvedAt: { type: Date },
+    resolvedBy: { type: String },
+    resolutionNotes: { type: String },
+  },
+  { timestamps: true },
+);
+
+const Dispute = mongoose.model<IDispute>('Dispute', DisputeSchema);
+
+export default Dispute;
+export { Dispute };

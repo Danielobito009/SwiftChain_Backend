@@ -1,68 +1,91 @@
 import { Request, Response, NextFunction } from 'express';
 import { StatusCodes } from 'http-status-codes';
-import { escrowService } from '../services/escrowService';
+import { getFlaggedEscrows, resolveEscrow } from '../services/escrowService';
+import type { IUser } from '../interfaces/IUser';
+import AppError from '../utils/AppError';
+
+// ─── GET /api/v1/admin/escrows/flagged ─────────────────────────────────────────
 
 /**
- * EscrowController exposes read access to escrow state so the frontend can
- * display the locking status of a delivery.
+ * Returns a paginated list of escrows flagged as expired for admin review.
  *
- * All business logic and persistence live in `EscrowService`; this layer only
- * translates HTTP <-> service calls.
+ * Query params:
+ *   - page   {number} Optional — defaults to 1.
+ *   - limit  {number} Optional — defaults to 20, capped at 100.
  */
-export class EscrowController {
-  /**
-   * GET /api/v1/escrow/delivery/:id
-   *
-   * Returns the escrow document associated with the given delivery. `:id`
-   * accepts either the delivery MongoDB `_id` or its business `deliveryId`.
-   *
-   * Response 200:
-   * ```json
-   * {
-   *   "status": "success",
-   *   "data": {
-   *     "escrow": {
-   *       "id": "65f0c1...",
-   *       "delivery": "65f0be...",
-   *       "status": "locked",
-   *       "amount": 150,
-   *       "assetCode": "XLM",
-   *       "contractId": "CB...",
-   *       "payerAddress": "GA...",
-   *       "lockTransactionHash": "9f2b...",
-   *       "lockedAt": "2026-01-04T10:12:31.000Z",
-   *       "lastSyncedLedger": 1240331,
-   *       "isFundsLocked": true,
-   *       "isSettled": false,
-   *       "createdAt": "2026-01-04T10:11:02.000Z",
-   *       "updatedAt": "2026-01-04T10:12:31.000Z"
-   *     },
-   *     "delivery": {
-   *       "id": "65f0be...",
-   *       "trackingNumber": "SWIFT-001",
-   *       "status": "in_progress",
-   *       "escrowAmount": 150,
-   *       "isArchived": false
-   *     }
-   *   }
-   * }
-   * ```
-   *
-   * Response 404 — the delivery does not exist, or it has no escrow record.
-   */
-  public async getEscrowByDelivery(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const { escrow, delivery } = await escrowService.getEscrowByDeliveryId(req.params.id);
+export const listFlaggedEscrows = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const page = req.query.page ? parseInt(req.query.page as string, 10) : undefined;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
 
-      res.status(StatusCodes.OK).json({
-        status: 'success',
-        data: { escrow: escrow.toJSON(), delivery },
-      });
-    } catch (error) {
-      next(error);
+    if (page !== undefined && (!Number.isInteger(page) || page < 1)) {
+      throw new AppError('"page" must be a positive integer.', StatusCodes.BAD_REQUEST);
     }
+
+    if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) {
+      throw new AppError('"limit" must be a positive integer.', StatusCodes.BAD_REQUEST);
+    }
+
+    const result = await getFlaggedEscrows({ page, limit });
+
+    res.status(StatusCodes.OK).json({
+      status: 'success',
+      data: result,
+    });
+  } catch (error) {
+    next(error);
   }
+};
+
+// ─── PATCH /api/v1/admin/escrows/:id/resolve ───────────────────────────────────
+
+interface ResolveEscrowBody {
+  notes?: unknown;
 }
 
-/** Singleton instance used by the router. */
-export const escrowController = new EscrowController();
+/**
+ * Marks a flagged (expired) escrow as resolved.
+ *
+ * Body:
+ *   - notes {string} Required — audit trail description of the resolution.
+ */
+export const resolveFlaggedEscrow = async (
+  req: Request<{ id: string }, unknown, ResolveEscrowBody>,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const adminUser = (req as Request & { user?: IUser }).user;
+
+    if (!adminUser) {
+      throw new AppError('Authentication required.', StatusCodes.UNAUTHORIZED);
+    }
+
+    const { notes } = req.body;
+
+    if (!notes || typeof notes !== 'string' || notes.trim().length === 0) {
+      throw new AppError(
+        'Resolution notes are required to resolve a flagged escrow.',
+        StatusCodes.BAD_REQUEST,
+      );
+    }
+
+    const escrow = await resolveEscrow({
+      escrowId: req.params.id,
+      adminId: adminUser._id.toString(),
+      notes: notes.trim(),
+    });
+
+    res.status(StatusCodes.OK).json({
+      status: 'success',
+      message: 'Escrow has been resolved successfully.',
+      data: { escrow },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
