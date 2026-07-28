@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import authenticate from '../middleware/authenticate';
 import requireRole from '../middleware/requireRole';
-import { suspendUser } from '../controllers/adminController';
+import { suspendUser, getDisputes } from '../controllers/adminController';
 import { UserRole } from '../interfaces/IUser';
 
 const router = Router();
@@ -9,6 +9,71 @@ const router = Router();
 // All admin routes require a valid JWT AND the admin role
 router.use(authenticate);
 router.use(requireRole(UserRole.ADMIN));
+
+/**
+ * @openapi
+ * /v1/admin/disputes:
+ *   get:
+ *     tags: [Admin]
+ *     summary: Fetch active or filtered disputes for admin dashboard
+ *     description: >
+ *       Admin-only. Returns a paginated list of delivery disputes.
+ *       Defaults to active disputes (`open` and `under_review`) when status query parameter is omitted.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Items per page (max 100)
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [open, under_review, resolved, rejected, active, all]
+ *         description: Filter disputes by status. Defaults to active disputes if omitted.
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved disputes
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Dispute'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *       400:
+ *         description: Invalid query parameters or unsupported status filter
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         description: Requester is not an admin
+ */
+router.get('/disputes', getDisputes);
 
 /**
  * @openapi
