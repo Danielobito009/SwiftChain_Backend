@@ -4,6 +4,7 @@ export enum UserRole {
   USER = 'user',
   DRIVER = 'driver',
   ADMIN = 'admin',
+  ENTERPRISE = 'enterprise',
 }
 
 export enum UserStatus {

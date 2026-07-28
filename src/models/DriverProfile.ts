@@ -1,6 +1,37 @@
 import mongoose, { Schema } from 'mongoose';
 import { IDriverProfile, ReputationTier } from '../interfaces/IDriverProfile';
 
+const vehicleDetailsSchema = new Schema(
+  {
+    make: {
+      type: String,
+      required: [true, 'Vehicle make is required'],
+      trim: true,
+    },
+    model: {
+      type: String,
+      required: [true, 'Vehicle model is required'],
+      trim: true,
+    },
+    year: {
+      type: Number,
+      min: [1980, 'Vehicle year must be 1980 or later'],
+      max: [new Date().getFullYear() + 1, 'Vehicle year cannot be in the future'],
+    },
+    plateNumber: {
+      type: String,
+      required: [true, 'Vehicle plate number is required'],
+      trim: true,
+      uppercase: true,
+    },
+    capacityKg: {
+      type: Number,
+      min: [0, 'capacityKg cannot be negative'],
+    },
+  },
+  { _id: false },
+);
+
 const driverProfileSchema = new Schema<IDriverProfile>(
   {
     userId: {
@@ -28,6 +59,10 @@ const driverProfileSchema = new Schema<IDriverProfile>(
       type: Number,
       default: 0,
       min: 0,
+    },
+    vehicleDetails: {
+      type: vehicleDetailsSchema,
+      required: false,
     },
   },
   { timestamps: true },

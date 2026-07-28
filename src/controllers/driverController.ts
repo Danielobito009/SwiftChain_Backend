@@ -1,5 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
+import { StatusCodes } from 'http-status-codes';
 import { driverService } from '../services/driverService';
+import type { IUser } from '../interfaces/IUser';
+import AppError from '../utils/AppError';
+
+interface SetVehicleDetailsBody {
+  make?: unknown;
+  model?: unknown;
+  year?: unknown;
+  plateNumber?: unknown;
+  capacityKg?: unknown;
+}
 
 class DriverController {
   /**
@@ -18,6 +29,66 @@ class DriverController {
       res.status(200).json({
         status: 'success',
         ...result,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * PATCH /api/v1/drivers/me/vehicle
+   *
+   * Creates or updates the authenticated driver's vehicle details.
+   * Protected by `authenticate` + `requireRole(UserRole.DRIVER)`.
+   *
+   * Body:
+   *   - make         {string} Required.
+   *   - model        {string} Required.
+   *   - plateNumber  {string} Required.
+   *   - year         {number} Optional.
+   *   - capacityKg   {number} Optional.
+   */
+  async setVehicleDetails(
+    req: Request<unknown, unknown, SetVehicleDetailsBody>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const driver = (req as Request & { user?: IUser }).user;
+      if (!driver) {
+        throw new AppError('Authentication required.', StatusCodes.UNAUTHORIZED);
+      }
+
+      const { make, model, year, plateNumber, capacityKg } = req.body;
+
+      if (!make || typeof make !== 'string') {
+        throw new AppError('make is required.', StatusCodes.BAD_REQUEST);
+      }
+      if (!model || typeof model !== 'string') {
+        throw new AppError('model is required.', StatusCodes.BAD_REQUEST);
+      }
+      if (!plateNumber || typeof plateNumber !== 'string') {
+        throw new AppError('plateNumber is required.', StatusCodes.BAD_REQUEST);
+      }
+      if (year !== undefined && typeof year !== 'number') {
+        throw new AppError('year must be a number.', StatusCodes.BAD_REQUEST);
+      }
+      if (capacityKg !== undefined && typeof capacityKg !== 'number') {
+        throw new AppError('capacityKg must be a number.', StatusCodes.BAD_REQUEST);
+      }
+
+      const profile = await driverService.setVehicleDetails(driver._id.toString(), {
+        make,
+        model,
+        plateNumber,
+        year: year as number | undefined,
+        capacityKg: capacityKg as number | undefined,
+      });
+
+      res.status(StatusCodes.OK).json({
+        status: 'success',
+        message: 'Vehicle details updated successfully.',
+        data: { profile },
       });
     } catch (err) {
       next(err);
