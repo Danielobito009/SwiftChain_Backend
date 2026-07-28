@@ -5,7 +5,9 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import app from '../src/app';
 import User from '../src/models/User';
 import Fleet from '../src/models/Fleet';
+import FleetInvitation from '../src/models/FleetInvitation';
 import { UserRole, UserStatus } from '../src/interfaces/IUser';
+import { FleetInvitationStatus } from '../src/interfaces/IFleet';
 
 // ─── Module mocks ──────────────────────────────────────────────────────────────
 
@@ -214,6 +216,330 @@ describe('POST /api/v1/fleets', () => {
 
       expect(resA.status).toBe(201);
       expect(resB.status).toBe(201);
+    });
+  });
+});
+
+// ─── POST /api/v1/fleets/:id/invite ────────────────────────────────────────────
+
+describe('POST /api/v1/fleets/:id/invite', () => {
+  describe('201 – successful invitation', () => {
+    it('invites a driver to the fleet', async () => {
+      const owner = await createUser({ role: UserRole.ENTERPRISE });
+      const driver = await createUser({ role: UserRole.DRIVER });
+      const token = signToken(owner._id.toString());
+      const fleet = await Fleet.create({ name: 'Invite Fleet', ownerId: owner._id });
+
+      const res = await request(app)
+        .post(`/api/v1/fleets/${fleet._id}/invite`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ driverId: driver._id.toString() });
+
+      expect(res.status).toBe(201);
+      expect(res.body.data.invitation.status).toBe(FleetInvitationStatus.PENDING);
+    });
+
+    it('persists the invitation to the database', async () => {
+      const owner = await createUser({ role: UserRole.ENTERPRISE });
+      const driver = await createUser({ role: UserRole.DRIVER });
+      const token = signToken(owner._id.toString());
+      const fleet = await Fleet.create({ name: 'Persisted Invite Fleet', ownerId: owner._id });
+
+      await request(app)
+        .post(`/api/v1/fleets/${fleet._id}/invite`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ driverId: driver._id.toString() });
+
+      const invitation = await FleetInvitation.findOne({
+        fleetId: fleet._id,
+        driverId: driver._id,
+      });
+      expect(invitation).not.toBeNull();
+      expect(invitation?.invitedBy.toString()).toBe(owner._id.toString());
+    });
+  });
+
+  describe('400 – validation errors', () => {
+    it('returns 400 when driverId is missing', async () => {
+      const owner = await createUser({ role: UserRole.ENTERPRISE });
+      const token = signToken(owner._id.toString());
+      const fleet = await Fleet.create({ name: 'No Driver Fleet', ownerId: owner._id });
+
+      const res = await request(app)
+        .post(`/api/v1/fleets/${fleet._id}/invite`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({});
+
+      expect(res.status).toBe(400);
+    });
+
+    it('returns 400 when driverId is not a valid ObjectId', async () => {
+      const owner = await createUser({ role: UserRole.ENTERPRISE });
+      const token = signToken(owner._id.toString());
+      const fleet = await Fleet.create({ name: 'Bad Driver Id Fleet', ownerId: owner._id });
+
+      const res = await request(app)
+        .post(`/api/v1/fleets/${fleet._id}/invite`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ driverId: 'not-an-objectid' });
+
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe('403 – authorisation errors', () => {
+    it("returns 403 when a non-owner enterprise user tries to invite to someone else's fleet", async () => {
+      const owner = await createUser({ role: UserRole.ENTERPRISE });
+      const otherEnterprise = await createUser({ role: UserRole.ENTERPRISE });
+      const driver = await createUser({ role: UserRole.DRIVER });
+      const token = signToken(otherEnterprise._id.toString());
+      const fleet = await Fleet.create({ name: 'Owned By Someone Else', ownerId: owner._id });
+
+      const res = await request(app)
+        .post(`/api/v1/fleets/${fleet._id}/invite`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ driverId: driver._id.toString() });
+
+      expect(res.status).toBe(403);
+    });
+  });
+
+  describe('404 – not found', () => {
+    it('returns 404 when the fleet does not exist', async () => {
+      const owner = await createUser({ role: UserRole.ENTERPRISE });
+      const driver = await createUser({ role: UserRole.DRIVER });
+      const token = signToken(owner._id.toString());
+      const nonExistentFleetId = new mongoose.Types.ObjectId().toString();
+
+      const res = await request(app)
+        .post(`/api/v1/fleets/${nonExistentFleetId}/invite`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ driverId: driver._id.toString() });
+
+      expect(res.status).toBe(404);
+    });
+
+    it('returns 404 when the invited driver does not exist', async () => {
+      const owner = await createUser({ role: UserRole.ENTERPRISE });
+      const token = signToken(owner._id.toString());
+      const fleet = await Fleet.create({ name: 'Ghost Driver Fleet', ownerId: owner._id });
+      const nonExistentDriverId = new mongoose.Types.ObjectId().toString();
+
+      const res = await request(app)
+        .post(`/api/v1/fleets/${fleet._id}/invite`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ driverId: nonExistentDriverId });
+
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('422 – business rule violations', () => {
+    it('returns 422 when the invited user is not a driver', async () => {
+      const owner = await createUser({ role: UserRole.ENTERPRISE });
+      const notADriver = await createUser({ role: UserRole.USER });
+      const token = signToken(owner._id.toString());
+      const fleet = await Fleet.create({ name: 'Not A Driver Fleet', ownerId: owner._id });
+
+      const res = await request(app)
+        .post(`/api/v1/fleets/${fleet._id}/invite`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ driverId: notADriver._id.toString() });
+
+      expect(res.status).toBe(422);
+    });
+  });
+
+  describe('409 – conflict', () => {
+    it('returns 409 when the driver already has a pending invitation', async () => {
+      const owner = await createUser({ role: UserRole.ENTERPRISE });
+      const driver = await createUser({ role: UserRole.DRIVER });
+      const token = signToken(owner._id.toString());
+      const fleet = await Fleet.create({ name: 'Double Invite Fleet', ownerId: owner._id });
+
+      await request(app)
+        .post(`/api/v1/fleets/${fleet._id}/invite`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ driverId: driver._id.toString() });
+
+      const res = await request(app)
+        .post(`/api/v1/fleets/${fleet._id}/invite`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ driverId: driver._id.toString() });
+
+      expect(res.status).toBe(409);
+    });
+
+    it('returns 409 when the driver is already a fleet member', async () => {
+      const owner = await createUser({ role: UserRole.ENTERPRISE });
+      const driver = await createUser({ role: UserRole.DRIVER });
+      const token = signToken(owner._id.toString());
+      const fleet = await Fleet.create({
+        name: 'Already Member Fleet',
+        ownerId: owner._id,
+        drivers: [driver._id],
+      });
+
+      const res = await request(app)
+        .post(`/api/v1/fleets/${fleet._id}/invite`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ driverId: driver._id.toString() });
+
+      expect(res.status).toBe(409);
+    });
+  });
+});
+
+// ─── PATCH /api/v1/fleets/invitations/:invitationId ────────────────────────────
+
+describe('PATCH /api/v1/fleets/invitations/:invitationId', () => {
+  describe('200 – accept', () => {
+    it('accepts a pending invitation and adds the driver to the fleet', async () => {
+      const owner = await createUser({ role: UserRole.ENTERPRISE });
+      const driver = await createUser({ role: UserRole.DRIVER });
+      const driverToken = signToken(driver._id.toString());
+      const fleet = await Fleet.create({ name: 'Accept Fleet', ownerId: owner._id });
+      const invitation = await FleetInvitation.create({
+        fleetId: fleet._id,
+        driverId: driver._id,
+        invitedBy: owner._id,
+      });
+
+      const res = await request(app)
+        .patch(`/api/v1/fleets/invitations/${invitation._id}`)
+        .set('Authorization', `Bearer ${driverToken}`)
+        .send({ accept: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.invitation.status).toBe(FleetInvitationStatus.ACCEPTED);
+
+      const updatedFleet = await Fleet.findById(fleet._id);
+      expect(updatedFleet?.drivers.map((id) => id.toString())).toContain(driver._id.toString());
+    });
+  });
+
+  describe('200 – decline', () => {
+    it('declines a pending invitation without adding the driver to the fleet', async () => {
+      const owner = await createUser({ role: UserRole.ENTERPRISE });
+      const driver = await createUser({ role: UserRole.DRIVER });
+      const driverToken = signToken(driver._id.toString());
+      const fleet = await Fleet.create({ name: 'Decline Fleet', ownerId: owner._id });
+      const invitation = await FleetInvitation.create({
+        fleetId: fleet._id,
+        driverId: driver._id,
+        invitedBy: owner._id,
+      });
+
+      const res = await request(app)
+        .patch(`/api/v1/fleets/invitations/${invitation._id}`)
+        .set('Authorization', `Bearer ${driverToken}`)
+        .send({ accept: false });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.invitation.status).toBe(FleetInvitationStatus.DECLINED);
+
+      const updatedFleet = await Fleet.findById(fleet._id);
+      expect(updatedFleet?.drivers).toHaveLength(0);
+    });
+  });
+
+  describe('400 – validation errors', () => {
+    it('returns 400 when accept is not a boolean', async () => {
+      const owner = await createUser({ role: UserRole.ENTERPRISE });
+      const driver = await createUser({ role: UserRole.DRIVER });
+      const driverToken = signToken(driver._id.toString());
+      const fleet = await Fleet.create({ name: 'Bad Accept Fleet', ownerId: owner._id });
+      const invitation = await FleetInvitation.create({
+        fleetId: fleet._id,
+        driverId: driver._id,
+        invitedBy: owner._id,
+      });
+
+      const res = await request(app)
+        .patch(`/api/v1/fleets/invitations/${invitation._id}`)
+        .set('Authorization', `Bearer ${driverToken}`)
+        .send({ accept: 'yes' });
+
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe('403 – authorisation errors', () => {
+    it('returns 403 when a different driver tries to respond to the invitation', async () => {
+      const owner = await createUser({ role: UserRole.ENTERPRISE });
+      const driver = await createUser({ role: UserRole.DRIVER });
+      const otherDriver = await createUser({ role: UserRole.DRIVER });
+      const otherDriverToken = signToken(otherDriver._id.toString());
+      const fleet = await Fleet.create({ name: 'Wrong Driver Fleet', ownerId: owner._id });
+      const invitation = await FleetInvitation.create({
+        fleetId: fleet._id,
+        driverId: driver._id,
+        invitedBy: owner._id,
+      });
+
+      const res = await request(app)
+        .patch(`/api/v1/fleets/invitations/${invitation._id}`)
+        .set('Authorization', `Bearer ${otherDriverToken}`)
+        .send({ accept: true });
+
+      expect(res.status).toBe(403);
+    });
+
+    it('returns 403 when an enterprise user tries to respond to an invitation', async () => {
+      const owner = await createUser({ role: UserRole.ENTERPRISE });
+      const driver = await createUser({ role: UserRole.DRIVER });
+      const ownerToken = signToken(owner._id.toString());
+      const fleet = await Fleet.create({ name: 'Enterprise Respond Fleet', ownerId: owner._id });
+      const invitation = await FleetInvitation.create({
+        fleetId: fleet._id,
+        driverId: driver._id,
+        invitedBy: owner._id,
+      });
+
+      const res = await request(app)
+        .patch(`/api/v1/fleets/invitations/${invitation._id}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ accept: true });
+
+      expect(res.status).toBe(403);
+    });
+  });
+
+  describe('404 – not found', () => {
+    it('returns 404 when the invitation does not exist', async () => {
+      const driver = await createUser({ role: UserRole.DRIVER });
+      const driverToken = signToken(driver._id.toString());
+      const nonExistentInvitationId = new mongoose.Types.ObjectId().toString();
+
+      const res = await request(app)
+        .patch(`/api/v1/fleets/invitations/${nonExistentInvitationId}`)
+        .set('Authorization', `Bearer ${driverToken}`)
+        .send({ accept: true });
+
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('409 – conflict', () => {
+    it('returns 409 when responding to an already-accepted invitation', async () => {
+      const owner = await createUser({ role: UserRole.ENTERPRISE });
+      const driver = await createUser({ role: UserRole.DRIVER });
+      const driverToken = signToken(driver._id.toString());
+      const fleet = await Fleet.create({ name: 'Already Responded Fleet', ownerId: owner._id });
+      const invitation = await FleetInvitation.create({
+        fleetId: fleet._id,
+        driverId: driver._id,
+        invitedBy: owner._id,
+        status: FleetInvitationStatus.ACCEPTED,
+        respondedAt: new Date(),
+      });
+
+      const res = await request(app)
+        .patch(`/api/v1/fleets/invitations/${invitation._id}`)
+        .set('Authorization', `Bearer ${driverToken}`)
+        .send({ accept: false });
+
+      expect(res.status).toBe(409);
     });
   });
 });

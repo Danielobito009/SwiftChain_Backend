@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import authenticate from '../middleware/authenticate';
 import requireRole from '../middleware/requireRole';
-import { createFleet } from '../controllers/fleetController';
+import { createFleet, inviteDriver, respondToInvitation } from '../controllers/fleetController';
 import { UserRole } from '../interfaces/IUser';
 
 const router = Router();
@@ -15,5 +15,19 @@ router.use(authenticate);
  * @access  Enterprise only
  */
 router.post('/', requireRole(UserRole.ENTERPRISE), createFleet);
+
+/**
+ * @route   POST /api/v1/fleets/:id/invite
+ * @desc    Invite a driver to join the fleet
+ * @access  Enterprise only (must be the fleet owner)
+ */
+router.post('/:id/invite', requireRole(UserRole.ENTERPRISE), inviteDriver);
+
+/**
+ * @route   PATCH /api/v1/fleets/invitations/:invitationId
+ * @desc    Driver accepts or declines a pending fleet invitation
+ * @access  Driver only
+ */
+router.patch('/invitations/:invitationId', requireRole(UserRole.DRIVER), respondToInvitation);
 
 export default router;
