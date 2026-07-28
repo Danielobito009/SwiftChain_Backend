@@ -15,6 +15,10 @@ const ChatMessageSchema = new mongoose.Schema(
   { versionKey: false },
 );
 
+// getRecentMessages (src/sockets/socketService.ts) runs on every socket
+// connection: an unfiltered find sorted by createdAt desc, limited to 10.
+ChatMessageSchema.index({ createdAt: -1 });
+
 const ChatMessage =
   (mongoose.models.ChatMessage as Model<IChatMessage>) ||
   mongoose.model<IChatMessage>('ChatMessage', ChatMessageSchema);
