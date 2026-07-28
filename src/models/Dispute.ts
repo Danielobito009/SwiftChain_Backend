@@ -1,102 +1,61 @@
-import { Schema, model, Document } from 'mongoose';
+import mongoose, { Schema, Document } from 'mongoose';
+
+export enum DisputeReason {
+  DAMAGED_PACKAGE = 'damaged_package',
+  LATE_DELIVERY = 'late_delivery',
+  WRONG_ITEM = 'wrong_item',
+  NON_DELIVERY = 'non_delivery',
+  OTHER = 'other',
+}
 
 export enum DisputeStatus {
   OPEN = 'open',
+  UNDER_REVIEW = 'under_review',
   RESOLVED = 'resolved',
+  REJECTED = 'rejected',
 }
 
-/**
- * Local mirror of a dispute lifecycle tracked on the SwiftChain Soroban
- * contract. Rows are created/updated exclusively by `disputeHandlers` as
- * on-chain events are indexed — this is a read model, not a source of truth.
- */
 export interface IDispute extends Document {
-  /** On-chain dispute identifier (unique per contract). */
-  disputeId: string;
-
-  /** Business identifier of the delivery this dispute concerns. */
   deliveryId: string;
-
-  /** Stellar account address of the party who opened the dispute. */
-  openedBy: string;
-
-  /** Free-form reason supplied when the dispute was opened. */
-  reason?: string;
-
+  raisedBy: string;
+  reason: DisputeReason;
+  description: string;
+  evidenceUrls?: string[];
   status: DisputeStatus;
-
-  /** Free-form resolution outcome supplied when the dispute was resolved. */
-  resolution?: string;
-
-  /** Ledger sequence at which the dispute was opened on-chain. */
-  openedLedger: number;
-
-  /** Ledger sequence at which the dispute was resolved on-chain. */
-  resolvedLedger?: number;
-
+  raisedAtLedger?: number;
   resolvedAt?: Date;
-
+  resolvedBy?: string;
+  resolutionNotes?: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
 const DisputeSchema = new Schema<IDispute>(
   {
-    disputeId: {
-      type: String,
-      required: [true, 'disputeId is required'],
-      unique: true,
-      index: true,
-    },
-
-    deliveryId: {
-      type: String,
-      required: [true, 'deliveryId is required'],
-      index: true,
-    },
-
-    openedBy: {
-      type: String,
-      required: [true, 'openedBy is required'],
-    },
-
+    deliveryId: { type: String, required: true, index: true },
+    raisedBy: { type: String, required: true, index: true },
     reason: {
       type: String,
-      default: null,
+      enum: Object.values(DisputeReason),
+      required: true,
     },
-
+    description: { type: String, required: true },
+    evidenceUrls: { type: [String], default: undefined },
     status: {
       type: String,
       enum: Object.values(DisputeStatus),
       default: DisputeStatus.OPEN,
       index: true,
     },
-
-    resolution: {
-      type: String,
-      default: null,
-    },
-
-    openedLedger: {
-      type: Number,
-      required: true,
-    },
-
-    resolvedLedger: {
-      type: Number,
-      default: null,
-    },
-
-    resolvedAt: {
-      type: Date,
-      default: null,
-    },
+    raisedAtLedger: { type: Number },
+    resolvedAt: { type: Date },
+    resolvedBy: { type: String },
+    resolutionNotes: { type: String },
   },
-  {
-    timestamps: true,
-  },
+  { timestamps: true },
 );
 
-DisputeSchema.index({ deliveryId: 1, createdAt: -1 });
+const Dispute = mongoose.model<IDispute>('Dispute', DisputeSchema);
 
-export const Dispute = model<IDispute>('Dispute', DisputeSchema);
+export default Dispute;
+export { Dispute };

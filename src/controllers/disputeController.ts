@@ -1,57 +1,50 @@
 import { Request, Response, NextFunction } from 'express';
 import { StatusCodes } from 'http-status-codes';
-import { disputeService } from '../services/disputeService';
-import { DisputeStatus } from '../models/Dispute';
+import { createDispute } from '../services/disputeService';
+import type { CreateDisputeInput } from '../validators/disputeValidator';
+import type { IUser } from '../interfaces/IUser';
+import AppError from '../utils/AppError';
 
-class DisputeController {
-  /**
-   * GET /api/v1/disputes
-   *
-   * Lists disputes synced from on-chain events, newest first.
-   * Supports ?page, ?limit, and ?status ("open" | "resolved") query params.
-   */
-  async listDisputes(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const page = Math.max(1, parseInt(req.query.page as string) || 1);
-      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+// ─── POST /api/v1/disputes ──────────────────────────────────────────────────────
 
-      const statusParam = req.query.status as string | undefined;
-      const status = Object.values(DisputeStatus).includes(statusParam as DisputeStatus)
-        ? (statusParam as DisputeStatus)
-        : undefined;
+/**
+ * POST /api/v1/disputes
+ *
+ * Opens a delivery dispute before any corresponding on-chain dispute
+ * workflow is executed. `req.body` has already been validated and
+ * normalized by the `validate(createDisputeSchema)` middleware.
+ *
+ * Responds:
+ *   201 — success, returns the created dispute document.
+ */
+export const openDispute = async (
+  req: Request<unknown, unknown, CreateDisputeInput>,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const user = (req as Request & { user?: IUser }).user;
 
-      const result = await disputeService.listDisputes(page, limit, status);
-
-      res.status(StatusCodes.OK).json({
-        status: 'success',
-        ...result,
-      });
-    } catch (err) {
-      next(err);
+    if (!user) {
+      throw new AppError('Authentication required.', StatusCodes.UNAUTHORIZED);
     }
+
+    const { deliveryId, reason, description, evidenceUrls } = req.body;
+
+    const dispute = await createDispute({
+      deliveryId,
+      raisedBy: user._id.toString(),
+      reason,
+      description,
+      evidenceUrls,
+    });
+
+    res.status(StatusCodes.CREATED).json({
+      status: 'success',
+      message: 'Dispute opened successfully.',
+      data: { dispute },
+    });
+  } catch (error) {
+    next(error);
   }
-
-  /**
-   * GET /api/v1/disputes/:disputeId
-   *
-   * Fetches a single dispute by its on-chain disputeId.
-   */
-  async getDispute(
-    req: Request<{ disputeId: string }>,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> {
-    try {
-      const dispute = await disputeService.getDisputeById(req.params.disputeId);
-
-      res.status(StatusCodes.OK).json({
-        status: 'success',
-        data: { dispute },
-      });
-    } catch (err) {
-      next(err);
-    }
-  }
-}
-
-export const disputeController = new DisputeController();
+};
