@@ -1,3 +1,4 @@
+import path from 'path';
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
@@ -64,6 +65,12 @@ app.use('/api', limiter);
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Serves files written by the local storage driver (used when
+// UPLOAD_STORAGE_DRIVER=local). Object keys are unguessable
+// (timestamp + UUID), but this directory should not be used for
+// sensitive evidence in production — configure the S3 driver instead.
+app.use('/uploads', express.static(path.join(process.cwd(), env.UPLOAD_LOCAL_DIR)));
 
 app.use('/api', routes);
 
