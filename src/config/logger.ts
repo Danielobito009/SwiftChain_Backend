@@ -1,4 +1,5 @@
 import winston from 'winston';
+import env from './env';
 
 const levels = {
   error: 0,
@@ -6,12 +7,6 @@ const levels = {
   info: 2,
   http: 3,
   debug: 4,
-};
-
-const level = (): string => {
-  const env = process.env.NODE_ENV || 'development';
-  const isDevelopment = env === 'development';
-  return process.env.LOG_LEVEL || (isDevelopment ? 'debug' : 'warn');
 };
 
 const colors = {
@@ -24,25 +19,33 @@ const colors = {
 
 winston.addColors(colors);
 
-const format = winston.format.combine(
+const devFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
   winston.format.colorize({ all: true }),
   winston.format.printf((info) => `${info.timestamp} ${info.level}: ${info.message}`),
 );
 
+const prodFormat = winston.format.combine(winston.format.timestamp(), winston.format.json());
+
 const transports = [
-  new winston.transports.Console(),
+  new winston.transports.Console({
+    format: env.NODE_ENV === 'development' ? devFormat : prodFormat,
+  }),
   new winston.transports.File({
     filename: 'logs/error.log',
     level: 'error',
+    format: prodFormat,
   }),
-  new winston.transports.File({ filename: 'logs/all.log' }),
+  new winston.transports.File({
+    filename: 'logs/all.log',
+    format: prodFormat,
+  }),
 ];
 
 const logger = winston.createLogger({
-  level: level(),
+  level: env.LOG_LEVEL,
   levels,
-  format,
+  format: env.NODE_ENV === 'development' ? devFormat : prodFormat,
   transports,
 });
 

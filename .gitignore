@@ -5,6 +5,7 @@ coverage
 .DS_Store
 *.log
 logs
+uploads
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
