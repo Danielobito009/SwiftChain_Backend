@@ -107,12 +107,72 @@ export class EventPoller {
         `handlers=${this.handlers.length}`,
     );
 
-    // Kick off an immediate poll, then continue on the interval.
+    // Kick off an immediate catch-up, then continue on the interval.
+    void this.catchUpThenPoll();
+  }
+
+  private async catchUpThenPoll(): Promise<void> {
+    await this.catchUp();
+    
     void this.poll();
 
     this.intervalHandle = setInterval(() => {
       void this.poll();
     }, this.pollIntervalMs);
+  }
+
+  /**
+   * Catches up to the current latest ledger for all handlers using paginated fetches.
+   */
+  public async catchUp(): Promise<void> {
+    logger.info('[EventPoller] Starting indexer catch-up phase...');
+    this.isRunning = true;
+    try {
+      const latest = await this.getLatestLedger();
+      for (const handler of this.handlers) {
+        let isCaughtUp = false;
+        while (!isCaughtUp) {
+          const entry = await EventLog.findOne({
+            eventType: handler.eventType,
+            contractId: handler.contractId,
+          }).lean();
+          
+          const currentLedger = entry?.lastProcessedLedger ?? 0;
+          if (entry && currentLedger >= latest) {
+            isCaughtUp = true;
+            logger.info(`[EventPoller] ${handler.eventType} is caught up to ledger ${latest}.`);
+            continue;
+          }
+          
+          await this.pollHandler(handler);
+          
+          const updatedEntry = await EventLog.findOne({
+            eventType: handler.eventType,
+            contractId: handler.contractId,
+          }).lean();
+          
+          const newLedger = updatedEntry?.lastProcessedLedger ?? 0;
+          if (newLedger >= latest) {
+            isCaughtUp = true;
+            logger.info(`[EventPoller] ${handler.eventType} is caught up to ledger ${latest}.`);
+          } else if (entry && newLedger === currentLedger) {
+            logger.warn(`[EventPoller] ${handler.eventType} failed to advance ledger. Aborting catch-up for this handler.`);
+            isCaughtUp = true;
+          } else {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+      }
+      logger.info('[EventPoller] Catch-up phase completed.');
+    } catch (err) {
+      logger.error(
+        `[EventPoller] Error during catch-up phase: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    } finally {
+      this.isRunning = false;
+    }
   }
 
   /**
