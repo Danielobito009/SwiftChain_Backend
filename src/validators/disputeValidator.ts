@@ -3,7 +3,11 @@ import { DisputeReason, DisputeStatus } from '../models/Dispute';
 
 export const createDisputeSchema = z.object({
   deliveryId: z.string({ error: 'deliveryId is required' }).trim().min(1, 'deliveryId is required'),
-  raisedBy: z.string({ error: 'raisedBy is required' }).trim().min(1, 'raisedBy is required').optional(),
+  raisedBy: z
+    .string({ error: 'raisedBy is required' })
+    .trim()
+    .min(1, 'raisedBy is required')
+    .optional(),
   reason: z.enum(DisputeReason, { error: 'A valid dispute reason is required' }),
   description: z
     .string({ error: 'description is required' })
