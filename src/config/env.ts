@@ -15,6 +15,8 @@ interface EnvConfig {
   RATE_LIMIT_WINDOW_MS: number;
   RATE_LIMIT_MAX_REQUESTS: number;
   DISPUTE_NOTIFICATION_WEBHOOK_URL: string;
+  UPLOAD_STORAGE_DRIVER?: string;
+  AWS_S3_BUCKET?: string;
 }
 
 const envSchema = z.object({
