@@ -44,12 +44,7 @@ router.get('/:id', authenticate, getDispute);
  * @desc    Add evidence URLs to an open dispute
  * @access  Authenticated users (dispute raiser or driver)
  */
-router.patch(
-  '/:id/evidence',
-  authenticate,
-  validate(addEvidenceSchema),
-  addEvidenceController,
-);
+router.patch('/:id/evidence', authenticate, validate(addEvidenceSchema), addEvidenceController);
 
 /**
  * @route   PATCH /api/v1/disputes/:id/resolve
@@ -68,11 +63,6 @@ router.patch(
  * @desc    Update dispute metadata (reason, description, evidence)
  * @access  Authenticated users (dispute raiser or admin)
  */
-router.patch(
-  '/:id',
-  authenticate,
-  validate(updateDisputeSchema),
-  updateDisputeController,
-);
+router.patch('/:id', authenticate, validate(updateDisputeSchema), updateDisputeController);
 
 export default router;
