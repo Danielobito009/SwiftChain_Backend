@@ -6,6 +6,12 @@ import {
   inviteDriver,
   respondToInvitation,
   getFleetMetrics,
+  getAllFleets,
+  getFleetById,
+  updateFleet,
+  deleteFleet,
+  addMember,
+  removeMember,
 } from '../controllers/fleetController';
 import { UserRole } from '../interfaces/IUser';
 
@@ -20,6 +26,48 @@ router.use(authenticate);
  * @access  Enterprise only
  */
 router.post('/', requireRole(UserRole.ENTERPRISE), createFleet);
+
+/**
+ * @route   GET /api/v1/fleets
+ * @desc    Get all fleets (paginated)
+ * @access  Enterprise/Admin
+ */
+router.get('/', requireRole(UserRole.ENTERPRISE), getAllFleets);
+
+/**
+ * @route   GET /api/v1/fleets/:id
+ * @desc    Get a single fleet by ID
+ * @access  Authenticated (fleet owner or member)
+ */
+router.get('/:id', getFleetById);
+
+/**
+ * @route   PUT /api/v1/fleets/:id
+ * @desc    Update a fleet
+ * @access  Enterprise (fleet owner only)
+ */
+router.put('/:id', requireRole(UserRole.ENTERPRISE), updateFleet);
+
+/**
+ * @route   DELETE /api/v1/fleets/:id
+ * @desc    Soft delete a fleet
+ * @access  Enterprise (fleet owner only)
+ */
+router.delete('/:id', requireRole(UserRole.ENTERPRISE), deleteFleet);
+
+/**
+ * @route   POST /api/v1/fleets/:id/members
+ * @desc    Add a member to the fleet
+ * @access  Enterprise (fleet owner only)
+ */
+router.post('/:id/members', requireRole(UserRole.ENTERPRISE), addMember);
+
+/**
+ * @route   DELETE /api/v1/fleets/:id/members/:userId
+ * @desc    Remove a member from the fleet
+ * @access  Enterprise (fleet owner only)
+ */
+router.delete('/:id/members/:userId', requireRole(UserRole.ENTERPRISE), removeMember);
 
 /**
  * @route   POST /api/v1/fleets/:id/invite

@@ -8,7 +8,7 @@ import AppError from '../utils/AppError';
 // ─── JWT payload shape ────────────────────────────────────────────────────────
 
 interface JwtPayload {
-  id: string;
+  userId: string;  // Changed from 'id' to 'userId' to match login route
   iat?: number;
   exp?: number;
 }
@@ -56,8 +56,8 @@ const authenticate = async (req: Request, _res: Response, next: NextFunction): P
       );
     }
 
-    // 3. Load the user from DB (re-validates they still exist)
-    const user = await User.findById(decoded.id).select('+password');
+    // 3. Load the user from DB using userId (changed from id)
+    const user = await User.findById(decoded.userId).select('+password');
     if (!user) {
       throw new AppError(
         'The user associated with this token no longer exists.',
