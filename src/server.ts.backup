@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import app from './app';
 import logger from './config/logger';
 import { startIndexerLagMonitor } from './services/monitorService';
-import {
+// import {
   initializeSocketServer,
   shutdownSocketServer,
   TypedServer,
@@ -45,4 +45,4 @@ const gracefulShutdown = (): void => {
 };
 
 process.on('SIGTERM', gracefulShutdown);
-process.on('SIGINT', gracefulShutdown);
+process.on('SIGI

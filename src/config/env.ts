@@ -15,8 +15,9 @@ interface EnvConfig {
   RATE_LIMIT_WINDOW_MS: number;
   RATE_LIMIT_MAX_REQUESTS: number;
   DISPUTE_NOTIFICATION_WEBHOOK_URL: string;
-  UPLOAD_STORAGE_DRIVER?: string;  // Add this
-  AWS_S3_BUCKET?: string;           // Add this
+  UPLOAD_STORAGE_DRIVER: string;
+  UPLOAD_LOCAL_DIR: string;
+  AWS_S3_BUCKET?: string;
 }
 
 const envSchema = z.object({
@@ -31,6 +32,9 @@ const envSchema = z.object({
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(900000),
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().min(1).default(100),
   DISPUTE_NOTIFICATION_WEBHOOK_URL: z.string().default(''),
+  UPLOAD_STORAGE_DRIVER: z.string().default('local'),
+  UPLOAD_LOCAL_DIR: z.string().default('uploads'),
+  AWS_S3_BUCKET: z.string().optional(),
 });
 
 let env: EnvConfig;
@@ -39,21 +43,17 @@ try {
   env = envSchema.parse(process.env);
 } catch (error) {
   if (error instanceof z.ZodError) {
-    // eslint-disable-next-line no-console
     console.error('❌ Invalid environment variables:');
     error.issues.forEach((issue) => {
-      // eslint-disable-next-line no-console
       console.error(`  - ${issue.path.join('.')}: ${issue.message}`);
     });
   } else {
-    // eslint-disable-next-line no-console
     console.error('❌ Failed to parse environment variables:', error);
   }
   process.exit(1);
 }
 
 if (env.UPLOAD_STORAGE_DRIVER === 's3' && !env.AWS_S3_BUCKET) {
-  // eslint-disable-next-line no-console
   console.error('❌ AWS_S3_BUCKET is required when UPLOAD_STORAGE_DRIVER=s3');
   process.exit(1);
 }
