@@ -13,6 +13,7 @@ import logger from './config/logger';
 import { connectDatabase } from './config/database';
 import errorHandler from './middleware/errorHandler';
 import requestLogger from './middleware/requestLogger';
+import { requestTracker } from './middleware/requestTracker';
 import env from './config/env';
 import swaggerSpec from './docs/swagger';
 
@@ -26,6 +27,8 @@ app.set('trust proxy', 1);
 
 app.use(helmet());
 app.use(compression());
+// Track in-flight requests and reject new ones during graceful shutdown.
+app.use(requestTracker);
 app.use(requestLogger);
 
 // Swagger UI needs inline <script>/<style>, which the default Helmet CSP

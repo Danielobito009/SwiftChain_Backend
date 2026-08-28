@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import logger from '../config/logger';
+import { startTrackedSession } from '../config/database';
 import DriverProfile from '../models/DriverProfile';
 import { computeTier } from '../interfaces/IDriverProfile';
 import { recordProcessedLedger } from '../services/monitorService';
@@ -31,7 +32,7 @@ export async function handleReputationIncreased(event: ReputationEvent): Promise
     return;
   }
 
-  const session = await mongoose.startSession();
+  const session = await startTrackedSession();
   try {
     await session.withTransaction(async () => {
       const profile = await DriverProfile.findOneAndUpdate(
@@ -90,7 +91,7 @@ export async function handleReputationSlashed(event: ReputationEvent): Promise<v
     return;
   }
 
-  const session = await mongoose.startSession();
+  const session = await startTrackedSession();
   try {
     await session.withTransaction(async () => {
       const existing = await DriverProfile.findOne(
