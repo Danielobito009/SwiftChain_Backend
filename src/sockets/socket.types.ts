@@ -147,6 +147,10 @@ export interface LocationUpdateAck {
   locationId?: string;
   /** Error message when success === false. */
   error?: string;
+  /** True if the update was rejected as a duplicate. */
+  isDuplicate?: boolean;
+  /** True if the update was rejected as stale (older than last processed). */
+  isStale?: boolean;
 }
 
 /**
