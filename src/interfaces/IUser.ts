@@ -24,6 +24,8 @@ export interface IUser extends Document {
   walletAddress?: string;
   suspendedReason?: string;
   suspendedAt?: Date;
+  profilePicture?: string;
+  profilePictureKey?: string;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;

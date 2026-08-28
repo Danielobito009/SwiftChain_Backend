@@ -22,6 +22,10 @@ interface EnvConfig {
   REDIS_LOCK_TTL_MS: number;
   REDIS_LOCK_RETRY_COUNT: number;
   REDIS_LOCK_RETRY_DELAY_MS: number;
+  PROFILE_PICTURE_MAX_SIZE_MB?: string;
+  PROFILE_PICTURE_WIDTH?: string;
+  PROFILE_PICTURE_HEIGHT?: string;
+  PROFILE_PICTURE_QUALITY?: string;
 }
 
 const envSchema = z.object({
@@ -43,6 +47,10 @@ const envSchema = z.object({
   REDIS_LOCK_TTL_MS: z.coerce.number().int().min(1000).default(10000),
   REDIS_LOCK_RETRY_COUNT: z.coerce.number().int().min(0).default(3),
   REDIS_LOCK_RETRY_DELAY_MS: z.coerce.number().int().min(50).default(200),
+  PROFILE_PICTURE_MAX_SIZE_MB: z.string().optional(),
+  PROFILE_PICTURE_WIDTH: z.string().optional(),
+  PROFILE_PICTURE_HEIGHT: z.string().optional(),
+  PROFILE_PICTURE_QUALITY: z.string().optional(),
 });
 
 let env: EnvConfig;
