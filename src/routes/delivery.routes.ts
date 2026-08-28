@@ -5,6 +5,7 @@ import {
   createDeliverySchema,
   updateDeliverySchema,
 } from '../validators/deliveryValidator';
+import { requireIdempotencyKey } from '../middlewares/idempotency';
 
 const router = Router();
 
@@ -72,6 +73,7 @@ const router = Router();
  */
 router.post(
   '/',
+  requireIdempotencyKey,
   validateRequest({ body: createDeliverySchema }),
   deliveryController.create.bind(deliveryController)
 );

@@ -18,6 +18,10 @@ interface EnvConfig {
   UPLOAD_STORAGE_DRIVER: string;
   UPLOAD_LOCAL_DIR: string;
   AWS_S3_BUCKET?: string;
+  /** Redis connection URL used by the idempotency store. Optional — when absent the app falls back to MongoDB-backed idempotency. */
+  REDIS_URL?: string;
+  /** TTL (seconds) for idempotency keys in Redis. Defaults to 86400 (24 h). */
+  IDEMPOTENCY_TTL_SECONDS: number;
 }
 
 const envSchema = z.object({
@@ -35,6 +39,8 @@ const envSchema = z.object({
   UPLOAD_STORAGE_DRIVER: z.string().default('local'),
   UPLOAD_LOCAL_DIR: z.string().default('uploads'),
   AWS_S3_BUCKET: z.string().optional(),
+  REDIS_URL: z.string().url().optional(),
+  IDEMPOTENCY_TTL_SECONDS: z.coerce.number().int().min(60).default(86400),
 });
 
 let env: EnvConfig;

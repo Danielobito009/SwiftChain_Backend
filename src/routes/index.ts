@@ -8,6 +8,7 @@ import driverRoutes from './driverRoutes';
 import fleetRoutes from './fleetRoutes';
 import disputeRoutes from './disputeRoutes';
 import eventLogRoutes from './eventLogRoutes';
+import escrowRoutes from './escrow.routes';
 
 const router = Router();
 
@@ -19,5 +20,6 @@ router.use('/v1/drivers', driverRoutes);
 router.use('/v1/fleets', fleetRoutes);
 router.use('/v1/disputes', disputeRoutes);
 router.use('/v1/eventlog', eventLogRoutes);
+router.use('/v1/escrow', escrowRoutes);
 
 export default router;
