@@ -169,6 +169,8 @@ export interface ClientToServerEvents {
   pong: (payload: PongPayload) => void;
   join_room: (room: string) => void;
   leave_room: (room: string) => void;
+  /** Fired by a client to acknowledge a queued server-side message. */
+  message_ack: (messageId: string) => void;
   /** Fired by driver upon reconnection to flush offline-buffered updates. */
   location_sync: (payload: LocationSyncPayload) => void;
   /** Fired by driver to broadcast a live GPS fix to a delivery room. */
