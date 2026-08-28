@@ -76,6 +76,7 @@ const router = Router();
  */
 router.post(
   '/',
+  requireIdempotencyKey,
   validateRequest({ body: createDeliverySchema }),
   deliveryController.create.bind(deliveryController)
 );

@@ -109,13 +109,22 @@ export function initializeSocketServer(httpServer: HttpServer): TypedServer {
 /**
  * Gracefully shut down the Socket.IO server:
  *   - Stop the health-check loop.
- *   - Close all client connections.
+ *   - Forcibly disconnect every connected client (drain).
+ *   - Clear the in-memory connection registry.
  *   - Close the Socket.IO server itself.
  *
  * @param io - The Socket.IO server to shut down.
  */
 export async function shutdownSocketServer(io: TypedServer): Promise<void> {
   socketService.stopHealthChecks();
+
+  const activeBefore = socketService.getConnectionCount();
+  logger.info(`[Socket] Draining ${activeBefore} active connection(s)...`);
+
+  // Force-close all client sockets so keep-alive / long-polling transports
+  // do not hold the process open after HTTP has stopped accepting work.
+  io.disconnectSockets(true);
+  socketService.clearConnections();
 
   return new Promise((resolve, reject) => {
     io.close((err) => {
