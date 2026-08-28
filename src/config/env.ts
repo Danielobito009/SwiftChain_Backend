@@ -18,10 +18,30 @@ interface EnvConfig {
   UPLOAD_STORAGE_DRIVER: string;
   UPLOAD_LOCAL_DIR: string;
   AWS_S3_BUCKET?: string;
-  /** Redis connection URL used by the idempotency store. Optional — when absent the app falls back to MongoDB-backed idempotency. */
-  REDIS_URL?: string;
-  /** TTL (seconds) for idempotency keys in Redis. Defaults to 86400 (24 h). */
-  IDEMPOTENCY_TTL_SECONDS: number;
+
+  // ── Circuit breaker — Google Maps Directions API ────────────────────────────
+  /** % of recent calls that must fail before the circuit opens. Default: 50 */
+  CB_GOOGLE_MAPS_ERROR_THRESHOLD_PERCENTAGE: number;
+  /** Rolling window size (ms) used to compute the error rate. Default: 30000 */
+  CB_GOOGLE_MAPS_ROLLING_WINDOW_MS: number;
+  /** How long (ms) the circuit stays open before trying a test call. Default: 60000 */
+  CB_GOOGLE_MAPS_RESET_TIMEOUT_MS: number;
+  /** Minimum calls in the window before the breaker can open. Default: 5 */
+  CB_GOOGLE_MAPS_VOLUME_THRESHOLD: number;
+  /** Per-call timeout (ms) before counting a call as a failure. Default: 10000 */
+  CB_GOOGLE_MAPS_TIMEOUT_MS: number;
+
+  // ── Circuit breaker — Stellar / Soroban RPC ─────────────────────────────────
+  /** % of recent calls that must fail before the circuit opens. Default: 50 */
+  CB_SOROBAN_ERROR_THRESHOLD_PERCENTAGE: number;
+  /** Rolling window size (ms). Default: 30000 */
+  CB_SOROBAN_ROLLING_WINDOW_MS: number;
+  /** How long (ms) the circuit stays open before attempting recovery. Default: 60000 */
+  CB_SOROBAN_RESET_TIMEOUT_MS: number;
+  /** Minimum calls in the window before the breaker can open. Default: 3 */
+  CB_SOROBAN_VOLUME_THRESHOLD: number;
+  /** Per-call timeout (ms). Default: 15000 */
+  CB_SOROBAN_TIMEOUT_MS: number;
 }
 
 const envSchema = z.object({
@@ -39,8 +59,20 @@ const envSchema = z.object({
   UPLOAD_STORAGE_DRIVER: z.string().default('local'),
   UPLOAD_LOCAL_DIR: z.string().default('uploads'),
   AWS_S3_BUCKET: z.string().optional(),
-  REDIS_URL: z.string().url().optional(),
-  IDEMPOTENCY_TTL_SECONDS: z.coerce.number().int().min(60).default(86400),
+
+  // ── Circuit breaker — Google Maps ───────────────────────────────────────────
+  CB_GOOGLE_MAPS_ERROR_THRESHOLD_PERCENTAGE: z.coerce.number().int().min(1).max(100).default(50),
+  CB_GOOGLE_MAPS_ROLLING_WINDOW_MS: z.coerce.number().int().min(1000).default(30_000),
+  CB_GOOGLE_MAPS_RESET_TIMEOUT_MS: z.coerce.number().int().min(1000).default(60_000),
+  CB_GOOGLE_MAPS_VOLUME_THRESHOLD: z.coerce.number().int().min(1).default(5),
+  CB_GOOGLE_MAPS_TIMEOUT_MS: z.coerce.number().int().min(100).default(10_000),
+
+  // ── Circuit breaker — Soroban RPC ───────────────────────────────────────────
+  CB_SOROBAN_ERROR_THRESHOLD_PERCENTAGE: z.coerce.number().int().min(1).max(100).default(50),
+  CB_SOROBAN_ROLLING_WINDOW_MS: z.coerce.number().int().min(1000).default(30_000),
+  CB_SOROBAN_RESET_TIMEOUT_MS: z.coerce.number().int().min(1000).default(60_000),
+  CB_SOROBAN_VOLUME_THRESHOLD: z.coerce.number().int().min(1).default(3),
+  CB_SOROBAN_TIMEOUT_MS: z.coerce.number().int().min(100).default(15_000),
 });
 
 let env: EnvConfig;
