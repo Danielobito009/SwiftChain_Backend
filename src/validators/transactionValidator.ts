@@ -23,3 +23,33 @@ export const escrowLockTransactionSchema = z.object({
 });
 
 export type EscrowLockTransactionBody = z.infer<typeof escrowLockTransactionSchema>;
+
+/**
+ * Body schema for `POST /api/v1/transactions/submit`.
+ *
+ * Accepts a signed XDR envelope (produced by the client wallet after signing
+ * the unsigned XDR from `/transactions/escrow-lock`) plus the identifiers
+ * needed to rebuild the transaction if a `tx_bad_seq` error is encountered.
+ */
+export const submitTransactionSchema = z.object({
+  deliveryId: z
+    .string()
+    .trim()
+    .regex(/^[a-f\d]{24}$/i, 'deliveryId must be a valid MongoDB ObjectId'),
+
+  payerAddress: z
+    .string()
+    .trim()
+    .refine(
+      (value) => StrKey.isValidEd25519PublicKey(value),
+      'payerAddress must be a valid Stellar public key (G...)',
+    ),
+
+  signedXdr: z
+    .string()
+    .trim()
+    .min(1, 'signedXdr is required')
+    .max(65_536, 'signedXdr exceeds maximum allowed length'),
+});
+
+export type SubmitTransactionBody = z.infer<typeof submitTransactionSchema>;

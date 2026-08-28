@@ -6,6 +6,7 @@ import {
   CreateDeliveryInput,
   UpdateDeliveryInput,
   DeliveryFilter,
+  AssignDriverInput,
 } from '../services/delivery.service';
 
 interface AuthenticatedRequest extends Request {
@@ -145,6 +146,42 @@ export class DeliveryController {
           limit: result.limit,
           totalPages: result.totalPages,
         },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /api/v1/deliveries/:id/assign-driver
+   *
+   * Assigns a driver to a delivery.  The request is rejected with a clear
+   * error if the delivery's Soroban escrow contract has not been successfully
+   * initialised (i.e. the escrow record is absent or its `lockStatus` is not
+   * `LOCKED`).
+   *
+   * Body: { driverId: string }
+   *
+   * Responses:
+   *   200 — driver assigned, returns updated delivery document.
+   *   400 — invalid delivery id or missing driverId.
+   *   404 — delivery not found.
+   *   409 — delivery already assigned / completed / cancelled, or escrow not LOCKED.
+   *   422 — escrow record does not exist (contract never initialised).
+   */
+  async assignDriver(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const input: AssignDriverInput = {
+        deliveryId: req.params.id,
+        driverId: req.body.driverId,
+      };
+
+      const delivery = await deliveryService.assignDriver(input);
+
+      res.status(httpStatus.OK).json({
+        status: 'success',
+        message: 'Driver assigned successfully.',
+        data: delivery,
       });
     } catch (error) {
       next(error);

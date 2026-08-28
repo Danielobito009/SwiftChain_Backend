@@ -5,7 +5,6 @@ import logger from './config/logger';
 import { startIndexerLagMonitor } from './services/monitorService';
 import {
   initializeSocketServer,
-  shutdownSocketServer,
   TypedServer,
 } from './sockets/connectionHandler';
 import { startEscrowMonitorJob, stopEscrowMonitorJob } from './jobs/escrowMonitor';

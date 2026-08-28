@@ -4,6 +4,7 @@ import logger from '../config/logger';
 import { socketService } from './socket.service';
 import { registerSyncHandler } from './syncHandler';
 import { registerLocationHandler } from './locationHandler';
+import { messageQueueService } from './messageQueue';
 import {
   PongPayload,
   ServerToClientEvents,
@@ -80,6 +81,21 @@ export function initializeSocketServer(httpServer: HttpServer): TypedServer {
       logger.info(`[Socket] id=${socket.id} joined room="${room}"`);
     });
 
+    socket.on('message_ack', (messageId: string) => {
+      const userId = socket.data.userId;
+      if (!userId) {
+        logger.warn(`[Socket] Acknowledgement received without userId for socket=${socket.id}`);
+        return;
+      }
+
+      const removed = messageQueueService.acknowledge(userId, messageId);
+      logger.debug(
+        removed
+          ? `[Socket] Acked queued message messageId=${messageId} userId=${userId}`
+          : `[Socket] Ack ignored; messageId=${messageId} not found for userId=${userId}`,
+      );
+    });
+
     // ── room leave tracking ──────────────────────────────────────────────────
     socket.on('leave_room', (room: string) => {
       socket.leave(room);
@@ -109,13 +125,22 @@ export function initializeSocketServer(httpServer: HttpServer): TypedServer {
 /**
  * Gracefully shut down the Socket.IO server:
  *   - Stop the health-check loop.
- *   - Close all client connections.
+ *   - Forcibly disconnect every connected client (drain).
+ *   - Clear the in-memory connection registry.
  *   - Close the Socket.IO server itself.
  *
  * @param io - The Socket.IO server to shut down.
  */
 export async function shutdownSocketServer(io: TypedServer): Promise<void> {
   socketService.stopHealthChecks();
+
+  const activeBefore = socketService.getConnectionCount();
+  logger.info(`[Socket] Draining ${activeBefore} active connection(s)...`);
+
+  // Force-close all client sockets so keep-alive / long-polling transports
+  // do not hold the process open after HTTP has stopped accepting work.
+  io.disconnectSockets(true);
+  socketService.clearConnections();
 
   return new Promise((resolve, reject) => {
     io.close((err) => {
