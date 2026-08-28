@@ -4,6 +4,7 @@ import logger from '../config/logger';
 import { socketService } from './socket.service';
 import { registerSyncHandler } from './syncHandler';
 import { registerLocationHandler } from './locationHandler';
+import { messageQueueService } from './messageQueue';
 import {
   PongPayload,
   ServerToClientEvents,
@@ -78,6 +79,21 @@ export function initializeSocketServer(httpServer: HttpServer): TypedServer {
       socket.join(room);
       socketService.trackRoomJoin(socket.id, room);
       logger.info(`[Socket] id=${socket.id} joined room="${room}"`);
+    });
+
+    socket.on('message_ack', (messageId: string) => {
+      const userId = socket.data.userId;
+      if (!userId) {
+        logger.warn(`[Socket] Acknowledgement received without userId for socket=${socket.id}`);
+        return;
+      }
+
+      const removed = messageQueueService.acknowledge(userId, messageId);
+      logger.debug(
+        removed
+          ? `[Socket] Acked queued message messageId=${messageId} userId=${userId}`
+          : `[Socket] Ack ignored; messageId=${messageId} not found for userId=${userId}`,
+      );
     });
 
     // ── room leave tracking ──────────────────────────────────────────────────
