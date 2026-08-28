@@ -106,6 +106,36 @@ export class EscrowService {
 
     return escrow;
   }
+
+  /**
+   * Fund (or record the funding of) an escrow via a direct HTTP request.
+   *
+   * This is the HTTP-layer entry point for `POST /api/v1/escrow/fund`.
+   * It delegates to `recordEscrowFunded` which owns the core write logic and
+   * its own transaction-level idempotency.  The additional HTTP-layer
+   * idempotency (Idempotency-Key header) is enforced by the
+   * `requireIdempotencyKey` middleware applied to the route in
+   * `escrow.routes.ts`.
+   *
+   * @param input - Validated escrow funding payload from the request body.
+   * @returns The created or updated Escrow document, fetched from the DB.
+   */
+  async fund(input: EscrowFundedInput): Promise<IEscrow> {
+    const escrow = await this.recordEscrowFunded(input);
+
+    // Re-fetch from DB to guarantee the response reflects persisted state.
+    const persisted = await Escrow.findById(escrow._id);
+    if (!persisted) {
+      throw new AppError('Escrow record not found after creation', httpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    logger.info(
+      `[EscrowService] fund() completed — contract=${input.contractId} ` +
+        `delivery=${input.deliveryId}`,
+    );
+
+    return persisted;
+  }
 }
 
 export const escrowService = new EscrowService();

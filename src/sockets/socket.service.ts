@@ -247,6 +247,14 @@ export class SocketService {
   }
 
   /**
+   * Clear the in-memory connection registry. Called after all sockets have
+   * been forcibly disconnected during graceful shutdown.
+   */
+  public clearConnections(): void {
+    this.connections.clear();
+  }
+
+  /**
    * Return a read-only snapshot of all active connections (for admin/debug
    * endpoints — never expose in public-facing routes).
    */
