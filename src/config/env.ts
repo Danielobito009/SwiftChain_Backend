@@ -18,6 +18,10 @@ interface EnvConfig {
   UPLOAD_STORAGE_DRIVER: string;
   UPLOAD_LOCAL_DIR: string;
   AWS_S3_BUCKET?: string;
+  REDIS_URL: string;
+  REDIS_LOCK_TTL_MS: number;
+  REDIS_LOCK_RETRY_COUNT: number;
+  REDIS_LOCK_RETRY_DELAY_MS: number;
 }
 
 const envSchema = z.object({
@@ -35,6 +39,10 @@ const envSchema = z.object({
   UPLOAD_STORAGE_DRIVER: z.string().default('local'),
   UPLOAD_LOCAL_DIR: z.string().default('uploads'),
   AWS_S3_BUCKET: z.string().optional(),
+  REDIS_URL: z.string().default('redis://localhost:6379'),
+  REDIS_LOCK_TTL_MS: z.coerce.number().int().min(1000).default(10000),
+  REDIS_LOCK_RETRY_COUNT: z.coerce.number().int().min(0).default(3),
+  REDIS_LOCK_RETRY_DELAY_MS: z.coerce.number().int().min(50).default(200),
 });
 
 let env: EnvConfig;
