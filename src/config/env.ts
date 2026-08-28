@@ -18,6 +18,16 @@ interface EnvConfig {
   UPLOAD_STORAGE_DRIVER: string;
   UPLOAD_LOCAL_DIR: string;
   AWS_S3_BUCKET?: string;
+
+  // ── Soroban RPC retry config ────────────────────────────────────────────────
+  /** Maximum attempts (including the first) for generic RPC retries. Default: 3 */
+  SOROBAN_RPC_MAX_RETRIES: number;
+  /** Base delay (ms) for RPC exponential backoff. Default: 250 */
+  SOROBAN_RPC_RETRY_BASE_MS: number;
+  /** Maximum delay (ms) cap for RPC exponential backoff. Default: 8000 */
+  SOROBAN_RPC_RETRY_MAX_MS: number;
+  /** Maximum attempts to retry a transaction that fails with tx_bad_seq. Default: 3 */
+  STELLAR_BAD_SEQ_MAX_RETRIES: number;
 }
 
 const envSchema = z.object({
@@ -35,6 +45,12 @@ const envSchema = z.object({
   UPLOAD_STORAGE_DRIVER: z.string().default('local'),
   UPLOAD_LOCAL_DIR: z.string().default('uploads'),
   AWS_S3_BUCKET: z.string().optional(),
+
+  // ── Soroban RPC retry config ────────────────────────────────────────────────
+  SOROBAN_RPC_MAX_RETRIES: z.coerce.number().int().min(1).max(20).default(3),
+  SOROBAN_RPC_RETRY_BASE_MS: z.coerce.number().int().min(50).default(250),
+  SOROBAN_RPC_RETRY_MAX_MS: z.coerce.number().int().min(500).default(8000),
+  STELLAR_BAD_SEQ_MAX_RETRIES: z.coerce.number().int().min(1).max(10).default(3),
 });
 
 let env: EnvConfig;
