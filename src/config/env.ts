@@ -19,29 +19,15 @@ interface EnvConfig {
   UPLOAD_LOCAL_DIR: string;
   AWS_S3_BUCKET?: string;
 
-  // ── Circuit breaker — Google Maps Directions API ────────────────────────────
-  /** % of recent calls that must fail before the circuit opens. Default: 50 */
-  CB_GOOGLE_MAPS_ERROR_THRESHOLD_PERCENTAGE: number;
-  /** Rolling window size (ms) used to compute the error rate. Default: 30000 */
-  CB_GOOGLE_MAPS_ROLLING_WINDOW_MS: number;
-  /** How long (ms) the circuit stays open before trying a test call. Default: 60000 */
-  CB_GOOGLE_MAPS_RESET_TIMEOUT_MS: number;
-  /** Minimum calls in the window before the breaker can open. Default: 5 */
-  CB_GOOGLE_MAPS_VOLUME_THRESHOLD: number;
-  /** Per-call timeout (ms) before counting a call as a failure. Default: 10000 */
-  CB_GOOGLE_MAPS_TIMEOUT_MS: number;
-
-  // ── Circuit breaker — Stellar / Soroban RPC ─────────────────────────────────
-  /** % of recent calls that must fail before the circuit opens. Default: 50 */
-  CB_SOROBAN_ERROR_THRESHOLD_PERCENTAGE: number;
-  /** Rolling window size (ms). Default: 30000 */
-  CB_SOROBAN_ROLLING_WINDOW_MS: number;
-  /** How long (ms) the circuit stays open before attempting recovery. Default: 60000 */
-  CB_SOROBAN_RESET_TIMEOUT_MS: number;
-  /** Minimum calls in the window before the breaker can open. Default: 3 */
-  CB_SOROBAN_VOLUME_THRESHOLD: number;
-  /** Per-call timeout (ms). Default: 15000 */
-  CB_SOROBAN_TIMEOUT_MS: number;
+  // ── Soroban RPC retry config ────────────────────────────────────────────────
+  /** Maximum attempts (including the first) for generic RPC retries. Default: 3 */
+  SOROBAN_RPC_MAX_RETRIES: number;
+  /** Base delay (ms) for RPC exponential backoff. Default: 250 */
+  SOROBAN_RPC_RETRY_BASE_MS: number;
+  /** Maximum delay (ms) cap for RPC exponential backoff. Default: 8000 */
+  SOROBAN_RPC_RETRY_MAX_MS: number;
+  /** Maximum attempts to retry a transaction that fails with tx_bad_seq. Default: 3 */
+  STELLAR_BAD_SEQ_MAX_RETRIES: number;
 }
 
 const envSchema = z.object({
@@ -60,19 +46,11 @@ const envSchema = z.object({
   UPLOAD_LOCAL_DIR: z.string().default('uploads'),
   AWS_S3_BUCKET: z.string().optional(),
 
-  // ── Circuit breaker — Google Maps ───────────────────────────────────────────
-  CB_GOOGLE_MAPS_ERROR_THRESHOLD_PERCENTAGE: z.coerce.number().int().min(1).max(100).default(50),
-  CB_GOOGLE_MAPS_ROLLING_WINDOW_MS: z.coerce.number().int().min(1000).default(30_000),
-  CB_GOOGLE_MAPS_RESET_TIMEOUT_MS: z.coerce.number().int().min(1000).default(60_000),
-  CB_GOOGLE_MAPS_VOLUME_THRESHOLD: z.coerce.number().int().min(1).default(5),
-  CB_GOOGLE_MAPS_TIMEOUT_MS: z.coerce.number().int().min(100).default(10_000),
-
-  // ── Circuit breaker — Soroban RPC ───────────────────────────────────────────
-  CB_SOROBAN_ERROR_THRESHOLD_PERCENTAGE: z.coerce.number().int().min(1).max(100).default(50),
-  CB_SOROBAN_ROLLING_WINDOW_MS: z.coerce.number().int().min(1000).default(30_000),
-  CB_SOROBAN_RESET_TIMEOUT_MS: z.coerce.number().int().min(1000).default(60_000),
-  CB_SOROBAN_VOLUME_THRESHOLD: z.coerce.number().int().min(1).default(3),
-  CB_SOROBAN_TIMEOUT_MS: z.coerce.number().int().min(100).default(15_000),
+  // ── Soroban RPC retry config ────────────────────────────────────────────────
+  SOROBAN_RPC_MAX_RETRIES: z.coerce.number().int().min(1).max(20).default(3),
+  SOROBAN_RPC_RETRY_BASE_MS: z.coerce.number().int().min(50).default(250),
+  SOROBAN_RPC_RETRY_MAX_MS: z.coerce.number().int().min(500).default(8000),
+  STELLAR_BAD_SEQ_MAX_RETRIES: z.coerce.number().int().min(1).max(10).default(3),
 });
 
 let env: EnvConfig;
