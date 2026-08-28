@@ -117,17 +117,38 @@ class RoutingService {
     };
   }
 
+  /**
+   * Calculate the great-circle distance between two points using the Haversine formula.
+   * Handles edge cases including anti-meridian crossings (±180° longitude).
+   *
+   * @param point1 - First coordinate point
+   * @param point2 - Second coordinate point
+   * @returns Distance in meters
+   */
   private calculateHaversineDistance(point1: Coordinates, point2: Coordinates): number {
-    const R = 6371000;
-    const dLat = this.toRadians(point2.lat - point1.lat);
-    const dLng = this.toRadians(point2.lng - point1.lng);
+    const R = 6371000; // Earth's radius in meters
 
+    const lat1Rad = this.toRadians(point1.lat);
+    const lat2Rad = this.toRadians(point2.lat);
+    const dLatRad = this.toRadians(point2.lat - point1.lat);
+
+    // Handle anti-meridian edge case:
+    // When longitude difference exceeds 180°, wrap around the shorter path
+    let lngDiff = point2.lng - point1.lng;
+
+    // Normalize longitude difference to [-180, 180]
+    if (lngDiff > 180) {
+      lngDiff -= 360;
+    } else if (lngDiff < -180) {
+      lngDiff += 360;
+    }
+
+    const dLngRad = this.toRadians(lngDiff);
+
+    // Haversine formula
     const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(this.toRadians(point1.lat)) *
-        Math.cos(this.toRadians(point2.lat)) *
-        Math.sin(dLng / 2) *
-        Math.sin(dLng / 2);
+      Math.sin(dLatRad / 2) * Math.sin(dLatRad / 2) +
+      Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.sin(dLngRad / 2) * Math.sin(dLngRad / 2);
 
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
