@@ -14,6 +14,7 @@ import { fundEscrowBodySchema } from '../validators/escrowValidator';
  *   GET  /api/v1/escrow/delivery/:deliveryId  — escrow record for a delivery
  *   GET  /api/v1/escrow/contract/:contractId  — escrow record for a contract id
  *   POST /api/v1/escrow/sync                  — manually trigger an escrow_funded indexer poll
+ *   POST /api/v1/escrow/release               — release an escrow with distributed locking
  */
 const router = Router();
 
@@ -89,5 +90,6 @@ router.post(
 router.get('/delivery/:deliveryId', escrowController.getByDelivery.bind(escrowController));
 router.get('/contract/:contractId', escrowController.getByContract.bind(escrowController));
 router.post('/sync', escrowController.sync.bind(escrowController));
+router.post('/release', escrowController.release.bind(escrowController));
 
 export default router;

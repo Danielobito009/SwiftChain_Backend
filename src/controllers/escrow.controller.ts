@@ -3,7 +3,7 @@ import httpStatus from 'http-status-codes';
 import { escrowService } from '../services/escrow.service';
 import { syncEscrowFundedEvents } from '../indexer/escrowHandlers';
 import { AppError } from '../utils/AppError';
-import { FundEscrowBody } from '../validators/escrowValidator';
+import logger from '../config/logger';
 
 /**
  * EscrowController handles HTTP requests for escrow records and for
@@ -58,53 +58,60 @@ export class EscrowController {
   }
 
   /**
-   * POST /api/v1/escrow/fund
+   * Release an escrow.
    *
-   * Records an on-chain `escrow_funded` event supplied by the caller.
-   * Idempotency is enforced at two levels:
-   *   1. HTTP level  — `requireIdempotencyKey` middleware (Idempotency-Key header).
-   *   2. Service level — `recordEscrowFunded` skips already-processed tx hashes.
+   * This endpoint uses distributed locking (Redis Redlock) to prevent concurrent
+   * requests from releasing the same escrow twice. The lock is acquired before
+   * processing and automatically released after completion.
    *
-   * @openapi
-   * /v1/escrow/fund:
-   *   post:
-   *     tags: [Escrow]
-   *     summary: Fund (record) an escrow for a delivery
-   *     description: |
-   *       Records an on-chain escrow_funded event against a delivery.
-   *       Requires the `Idempotency-Key` header to prevent duplicate charges
-   *       on network retries.
-   *     requestBody:
-   *       required: true
-   *       content:
-   *         application/json:
-   *           schema:
-   *             $ref: '#/components/schemas/FundEscrowRequest'
-   *     responses:
-   *       201:
-   *         description: Escrow funded successfully
-   *       409:
-   *         description: Duplicate idempotency key or escrow already funded
-   *       422:
-   *         description: Missing Idempotency-Key header
+   * Body:
+   *   - escrowId: string (required) — MongoDB ObjectId or contractId
+   *   - transactionHash: string (required) — On-chain transaction hash
+   *   - ledger: number (optional) — Ledger sequence for audit trail
+   *
+   * @route POST /api/v1/escrow/release
    */
-  async fund(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async release(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const body = req.body as FundEscrowBody;
+      const { escrowId, transactionHash, ledger } = req.body;
 
-      const escrow = await escrowService.fund({
-        deliveryId: body.deliveryId,
-        contractId: body.contractId,
-        transactionHash: body.transactionHash,
-        amount: body.amount,
-        asset: body.asset,
-        fundedBy: body.fundedBy,
-        ledger: body.ledger,
+      // Validate required fields
+      if (!escrowId || typeof escrowId !== 'string' || escrowId.trim().length === 0) {
+        throw new AppError('escrowId is required', httpStatus.BAD_REQUEST);
+      }
+
+      if (
+        !transactionHash ||
+        typeof transactionHash !== 'string' ||
+        transactionHash.trim().length === 0
+      ) {
+        throw new AppError('transactionHash is required', httpStatus.BAD_REQUEST);
+      }
+
+      // Validate ledger if provided
+      if (ledger !== undefined && (!Number.isInteger(ledger) || ledger < 0)) {
+        throw new AppError('ledger must be a non-negative integer', httpStatus.BAD_REQUEST);
+      }
+
+      // Extract user ID from authenticated request (if available)
+      const user = (req as Request & { user?: { _id: string; id: string } }).user;
+      const releasedBy = user?._id || user?.id;
+
+      logger.info(
+        `[EscrowController] Release request received — escrowId=${escrowId} tx=${transactionHash}`,
+      );
+
+      const escrow = await escrowService.releaseEscrow({
+        escrowId: escrowId.trim(),
+        transactionHash: transactionHash.trim(),
+        ledger,
+        releasedBy,
       });
 
-      res.status(httpStatus.CREATED).json({
+      res.status(httpStatus.OK).json({
         status: 'success',
-        data: escrow,
+        message: 'Escrow released successfully',
+        data: { escrow },
       });
     } catch (error) {
       next(error);

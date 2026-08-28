@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document, Types } from 'mongoose';
+import mongoose, { Schema, Document, Types, Model } from 'mongoose';
 
 /**
  * Lifecycle of funds held in a Soroban escrow contract for a delivery.
@@ -22,19 +22,12 @@ export interface IEscrowTransaction {
 }
 
 export interface IEscrow extends Document {
-  /** Reference to the delivery this escrow secures. */
   delivery: Types.ObjectId;
-  /** Soroban contract id (`C...`) holding the funds. */
   contractId: string;
-  /** Escrowed amount, denominated in `asset` units (not stroops). */
   amount: number;
-  /** Asset code of the escrowed funds (e.g. `XLM`, `USDC`). */
   asset: string;
-  /** Current escrow lifecycle state. */
   lockStatus: EscrowLockStatus;
-  /** Stellar account that funded the escrow. */
   fundedBy?: string;
-  /** On-chain transactions recorded against this escrow. */
   transactions: IEscrowTransaction[];
   lockedAt?: Date;
   releasedAt?: Date;
@@ -62,8 +55,7 @@ const EscrowSchema = new Schema<IEscrow>(
     delivery: {
       type: Schema.Types.ObjectId,
       ref: 'Delivery',
-      required: [true, 'delivery is required'],
-      unique: true,
+      required: true,
       index: true,
     },
     contractId: {
@@ -104,7 +96,8 @@ const EscrowSchema = new Schema<IEscrow>(
 // all escrows, preventing duplicate ingestion by the indexer.
 EscrowSchema.index({ 'transactions.hash': 1 }, { unique: true, sparse: true });
 
-const Escrow = mongoose.model<IEscrow>('Escrow', EscrowSchema);
+const Escrow: Model<IEscrow> =
+  (mongoose.models.Escrow as Model<IEscrow>) || mongoose.model<IEscrow>('Escrow', EscrowSchema);
 
 export default Escrow;
 export { Escrow };

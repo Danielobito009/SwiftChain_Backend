@@ -57,6 +57,14 @@ const userSchema = new Schema<IUser>(
       sparse: true,
       match: [/^G[A-Z2-7]{55}$/, 'Please provide a valid Stellar public key'],
     },
+    profilePicture: {
+      type: String,
+      trim: true,
+    },
+    profilePictureKey: {
+      type: String,
+      trim: true,
+    },
   },
   {
     timestamps: true,

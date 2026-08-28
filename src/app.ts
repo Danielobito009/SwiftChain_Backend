@@ -16,6 +16,7 @@ import requestLogger from './middleware/requestLogger';
 import { requestTracker } from './middleware/requestTracker';
 import env from './config/env';
 import swaggerSpec from './docs/swagger';
+import { redisClient } from './config/redis';
 
 dotenv.config();
 
@@ -78,12 +79,15 @@ app.use('/uploads', express.static(path.join(process.cwd(), env.UPLOAD_LOCAL_DIR
 app.use('/api', routes);
 
 app.get('/health', (req, res): void => {
+  const redisStatus = redisClient.status === 'ready' ? 'connected' : redisClient.status;
+  
   res.status(200).json({
     status: 'success',
     message: 'SwiftChain-Backend is running',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    redis: redisStatus,
   });
 });
 

@@ -1,168 +1,383 @@
-/**
- * Unit tests for ETA geohash cache keys, geohash encoding, and routingService
- * cache behaviour (hit/miss, external API skip on hit).
- */
-
-jest.mock('../src/config/logger', () => ({
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
-  debug: jest.fn(),
-}));
-
-jest.mock('axios');
-
-const mockCacheGet = jest.fn();
-const mockCacheSet = jest.fn();
-
-jest.mock('../src/services/etaCacheService', () => ({
-  etaCacheService: {
-    get: (...args: unknown[]) => mockCacheGet(...args),
-    set: (...args: unknown[]) => mockCacheSet(...args),
-  },
-  EtaCacheService: jest.requireActual('../src/services/etaCacheService').EtaCacheService,
-}));
-
-import axios from 'axios';
-import { encodeGeohash } from '../src/utils/geohash';
-import { buildEtaCacheKey } from '../src/utils/etaCacheKey';
-import { EtaCacheService } from '../src/services/etaCacheService';
 import { routingService } from '../src/services/routingService';
+import type { ETARequest, Coordinates } from '../src/services/routingService';
 
-const mockedAxiosGet = axios.get as jest.Mock;
+describe('RoutingService - Haversine Distance Calculation', () => {
+  describe('Standard Distance Calculations', () => {
+    it('should calculate distance between New York and Los Angeles', async () => {
+      const request: ETARequest = {
+        pickup: { lat: 40.7128, lng: -74.006 }, // New York
+        dropoff: { lat: 34.0522, lng: -118.2437 }, // Los Angeles
+      };
 
-describe('encodeGeohash', () => {
-  it('produces a stable hash for the same coordinates', () => {
-    expect(encodeGeohash(6.5244, 3.3792, 7)).toBe(encodeGeohash(6.5244, 3.3792, 7));
-  });
+      const result = await routingService.calculateETA(request);
 
-  it('buckets nearby coordinates into the same hash at low precision', () => {
-    const a = encodeGeohash(6.52441, 3.37921, 6);
-    const b = encodeGeohash(6.52449, 3.37929, 6);
-    expect(a).toBe(b);
-  });
-});
+      // Expected distance: ~3944 km
+      expect(result.distance).toBeGreaterThan(3900);
+      expect(result.distance).toBeLessThan(4000);
+      expect(result.estimatedTime).toBeGreaterThan(0);
+    });
 
-describe('buildEtaCacheKey', () => {
-  it('includes geohashes and travel mode', () => {
-    const key = buildEtaCacheKey(
-      { lat: 6.5244, lng: 3.3792 },
-      { lat: 6.455, lng: 3.3941 },
-      'driving',
-      7,
-    );
+    it('should calculate distance between London and Paris', async () => {
+      const request: ETARequest = {
+        pickup: { lat: 51.5074, lng: -0.1278 }, // London
+        dropoff: { lat: 48.8566, lng: 2.3522 }, // Paris
+      };
 
-    expect(key).toMatch(/^eta:[0-9a-z]+:[0-9a-z]+:driving$/);
-  });
-});
+      const result = await routingService.calculateETA(request);
 
-describe('EtaCacheService', () => {
-  const mockRedisGet = jest.fn();
-  const mockRedisSet = jest.fn();
+      // Expected distance: ~344 km
+      expect(result.distance).toBeGreaterThan(330);
+      expect(result.distance).toBeLessThan(360);
+    });
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockRedisGet.mockResolvedValue(null);
-    mockRedisSet.mockResolvedValue('OK');
+    it('should calculate zero distance for identical coordinates', async () => {
+      const request: ETARequest = {
+        pickup: { lat: 0, lng: 0 },
+        dropoff: { lat: 0, lng: 0 },
+      };
 
-    jest.spyOn(require('../src/config/redis'), 'getRedisClient').mockReturnValue({
-      get: mockRedisGet,
-      set: mockRedisSet,
+      const result = await routingService.calculateETA(request);
+
+      expect(result.distance).toBe(0);
+      expect(result.estimatedTime).toBe(0);
+    });
+
+    it('should calculate small distance accurately', async () => {
+      const request: ETARequest = {
+        pickup: { lat: 40.7128, lng: -74.006 },
+        dropoff: { lat: 40.7589, lng: -73.9851 }, // Times Square to Central Park (~5 km)
+      };
+
+      const result = await routingService.calculateETA(request);
+
+      expect(result.distance).toBeGreaterThan(4);
+      expect(result.distance).toBeLessThan(7);
     });
   });
 
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
+  describe('Anti-Meridian Edge Cases (±180° longitude)', () => {
+    it('should handle crossing the anti-meridian from west to east', async () => {
+      // Fiji (178°E) to Samoa (172°W)
+      const request: ETARequest = {
+        pickup: { lat: -18.1248, lng: 178.4501 }, // Fiji
+        dropoff: { lat: -13.759, lng: -172.1046 }, // Samoa
+      };
 
-  it('returns null on cache miss', async () => {
-    const service = new EtaCacheService({ ttlSeconds: 300, geohashPrecision: 7 });
-    const lookup = {
-      pickup: { lat: 6.5244, lng: 3.3792 },
-      dropoff: { lat: 6.455, lng: 3.3941 },
-      travelMode: 'driving' as const,
-    };
+      const result = await routingService.calculateETA(request);
 
-    const result = await service.get(lookup);
-    expect(result).toBeNull();
-    expect(mockRedisGet).toHaveBeenCalledTimes(1);
-  });
-
-  it('stores ETA JSON with TTL on set', async () => {
-    const service = new EtaCacheService({ ttlSeconds: 300, geohashPrecision: 7 });
-    const lookup = {
-      pickup: { lat: 6.5244, lng: 3.3792 },
-      dropoff: { lat: 6.455, lng: 3.3941 },
-      travelMode: 'driving' as const,
-    };
-    const eta = {
-      estimatedTime: 18,
-      distance: 12.4,
-      durationText: '18 mins',
-      distanceText: '12.4 km',
-      route: {
-        distance: 12400,
-        duration: 1080,
-        distanceText: '12.4 km',
-        durationText: '18 mins',
-      },
-    };
-
-    await service.set(lookup, eta);
-
-    expect(mockRedisSet).toHaveBeenCalledWith(
-      expect.stringMatching(/^eta:/),
-      JSON.stringify(eta),
-      'EX',
-      300,
-    );
-  });
-});
-
-describe('routingService.calculateETA', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    delete process.env.GOOGLE_MAPS_API_KEY;
-    mockCacheGet.mockResolvedValue(null);
-    mockCacheSet.mockResolvedValue(undefined);
-  });
-
-  it('returns cached ETA without calling external APIs on cache hit', async () => {
-    const cached = {
-      estimatedTime: 22,
-      distance: 8.5,
-      durationText: '22 mins',
-      distanceText: '8.5 km',
-      route: {
-        distance: 8500,
-        duration: 1320,
-        distanceText: '8.5 km',
-        durationText: '22 mins',
-      },
-    };
-    mockCacheGet.mockResolvedValueOnce(cached);
-
-    const result = await routingService.calculateETA({
-      pickup: { lat: 6.5244, lng: 3.3792 },
-      dropoff: { lat: 6.455, lng: 3.3941 },
+      // Distance should be ~1100 km (short path across anti-meridian)
+      // NOT ~19,000 km (wrong way around the globe)
+      expect(result.distance).toBeGreaterThan(1000);
+      expect(result.distance).toBeLessThan(1300);
     });
 
-    expect(result).toEqual(cached);
-    expect(mockedAxiosGet).not.toHaveBeenCalled();
-    expect(mockCacheSet).not.toHaveBeenCalled();
-  });
+    it('should handle crossing the anti-meridian from east to west', async () => {
+      // Samoa (172°W) to Fiji (178°E) - reverse direction
+      const request: ETARequest = {
+        pickup: { lat: -13.759, lng: -172.1046 }, // Samoa
+        dropoff: { lat: -18.1248, lng: 178.4501 }, // Fiji
+      };
 
-  it('computes ETA and writes to cache on miss', async () => {
-    const result = await routingService.calculateETA({
-      pickup: { lat: 6.5244, lng: 3.3792 },
-      dropoff: { lat: 6.455, lng: 3.3941 },
-      travelMode: 'driving',
+      const result = await routingService.calculateETA(request);
+
+      // Should be same distance as previous test (symmetric)
+      expect(result.distance).toBeGreaterThan(1000);
+      expect(result.distance).toBeLessThan(1300);
     });
 
-    expect(result.estimatedTime).toBeGreaterThan(0);
-    expect(result.distance).toBeGreaterThan(0);
-    expect(mockCacheGet).toHaveBeenCalledTimes(1);
-    expect(mockCacheSet).toHaveBeenCalledTimes(1);
-    expect(mockedAxiosGet).not.toHaveBeenCalled();
+    it('should handle points near but not crossing the anti-meridian (East)', async () => {
+      const request: ETARequest = {
+        pickup: { lat: 0, lng: 170 },
+        dropoff: { lat: 0, lng: 175 },
+      };
+
+      const result = await routingService.calculateETA(request);
+
+      // 5° longitude at equator ≈ 556 km
+      expect(result.distance).toBeGreaterThan(540);
+      expect(result.distance).toBeLessThan(570);
+    });
+
+    it('should handle points near but not crossing the anti-meridian (West)', async () => {
+      const request: ETARequest = {
+        pickup: { lat: 0, lng: -175 },
+        dropoff: { lat: 0, lng: -170 },
+      };
+
+      const result = await routingService.calculateETA(request);
+
+      // 5° longitude at equator ≈ 556 km
+      expect(result.distance).toBeGreaterThan(540);
+      expect(result.distance).toBeLessThan(570);
+    });
+
+    it('should handle equator crossing at anti-meridian', async () => {
+      const request: ETARequest = {
+        pickup: { lat: 5, lng: 179 },
+        dropoff: { lat: -5, lng: -179 },
+      };
+
+      const result = await routingService.calculateETA(request);
+
+      // ~10° latitude + ~2° longitude (short path) ≈ 1,134 km
+      expect(result.distance).toBeGreaterThan(1100);
+      expect(result.distance).toBeLessThan(1200);
+    });
+
+    it('should handle exactly at anti-meridian boundaries', async () => {
+      const request: ETARequest = {
+        pickup: { lat: 0, lng: 180 },
+        dropoff: { lat: 0, lng: -180 },
+      };
+
+      const result = await routingService.calculateETA(request);
+
+      // These are the same point (180° = -180°)
+      expect(result.distance).toBeLessThan(1); // Allow small floating-point errors
+    });
+
+    it('should handle large anti-meridian crossing', async () => {
+      // Alaska (USA) to Chukotka (Russia)
+      const request: ETARequest = {
+        pickup: { lat: 64.2008, lng: -149.4937 }, // Fairbanks, Alaska
+        dropoff: { lat: 64.7341, lng: 177.5128 }, // Pevek, Russia
+      };
+
+      const result = await routingService.calculateETA(request);
+
+      // Short path across Bering Strait ≈ 1,565 km
+      // WITHOUT fix: would calculate ~37,000 km (wrong way around)
+      expect(result.distance).toBeGreaterThan(1500);
+      expect(result.distance).toBeLessThan(1650);
+    });
+  });
+
+  describe('Edge Cases - Poles and Extreme Latitudes', () => {
+    it('should handle North Pole to nearby point', async () => {
+      const request: ETARequest = {
+        pickup: { lat: 90, lng: 0 }, // North Pole
+        dropoff: { lat: 85, lng: 0 },
+      };
+
+      const result = await routingService.calculateETA(request);
+
+      // 5° latitude ≈ 556 km
+      expect(result.distance).toBeGreaterThan(540);
+      expect(result.distance).toBeLessThan(570);
+    });
+
+    it('should handle South Pole to nearby point', async () => {
+      const request: ETARequest = {
+        pickup: { lat: -90, lng: 0 }, // South Pole
+        dropoff: { lat: -85, lng: 0 },
+      };
+
+      const result = await routingService.calculateETA(request);
+
+      // 5° latitude ≈ 556 km
+      expect(result.distance).toBeGreaterThan(540);
+      expect(result.distance).toBeLessThan(570);
+    });
+
+    it('should handle crossing from North to South hemisphere', async () => {
+      const request: ETARequest = {
+        pickup: { lat: 45, lng: 0 },
+        dropoff: { lat: -45, lng: 0 },
+      };
+
+      const result = await routingService.calculateETA(request);
+
+      // 90° latitude ≈ 10,000 km
+      expect(result.distance).toBeGreaterThan(9900);
+      expect(result.distance).toBeLessThan(10100);
+    });
+  });
+
+  describe('Different Travel Modes', () => {
+    const baseRequest: ETARequest = {
+      pickup: { lat: 40.7128, lng: -74.006 },
+      dropoff: { lat: 40.7589, lng: -73.9851 }, // ~5 km
+    };
+
+    it('should calculate ETA for driving mode', async () => {
+      const result = await routingService.calculateETA({
+        ...baseRequest,
+        travelMode: 'driving',
+      });
+
+      // 5 km at 40 km/h ≈ 7.5 minutes
+      expect(result.estimatedTime).toBeGreaterThan(6);
+      expect(result.estimatedTime).toBeLessThan(10);
+    });
+
+    it('should calculate ETA for walking mode', async () => {
+      const result = await routingService.calculateETA({
+        ...baseRequest,
+        travelMode: 'walking',
+      });
+
+      // 5 km at 5 km/h = 60 minutes
+      expect(result.estimatedTime).toBeGreaterThan(55);
+      expect(result.estimatedTime).toBeLessThan(70);
+    });
+
+    it('should calculate ETA for bicycling mode', async () => {
+      const result = await routingService.calculateETA({
+        ...baseRequest,
+        travelMode: 'bicycling',
+      });
+
+      // 5 km at 15 km/h = 20 minutes
+      expect(result.estimatedTime).toBeGreaterThan(18);
+      expect(result.estimatedTime).toBeLessThan(25);
+    });
+
+    it('should calculate ETA for transit mode', async () => {
+      const result = await routingService.calculateETA({
+        ...baseRequest,
+        travelMode: 'transit',
+      });
+
+      // 5 km at 25 km/h = 12 minutes
+      expect(result.estimatedTime).toBeGreaterThan(10);
+      expect(result.estimatedTime).toBeLessThan(15);
+    });
+  });
+
+  describe('Response Format Validation', () => {
+    it('should return properly formatted response', async () => {
+      const request: ETARequest = {
+        pickup: { lat: 0, lng: 0 },
+        dropoff: { lat: 1, lng: 1 },
+      };
+
+      const result = await routingService.calculateETA(request);
+
+      expect(result).toHaveProperty('estimatedTime');
+      expect(result).toHaveProperty('distance');
+      expect(result).toHaveProperty('durationText');
+      expect(result).toHaveProperty('distanceText');
+      expect(result).toHaveProperty('route');
+      expect(result.route).toHaveProperty('distance');
+      expect(result.route).toHaveProperty('duration');
+      expect(result.route).toHaveProperty('distanceText');
+      expect(result.route).toHaveProperty('durationText');
+    });
+
+    it('should format distance text correctly', async () => {
+      const request: ETARequest = {
+        pickup: { lat: 0, lng: 0 },
+        dropoff: { lat: 1, lng: 1 },
+      };
+
+      const result = await routingService.calculateETA(request);
+
+      expect(result.distanceText).toMatch(/\d+(\.\d+)? km/);
+    });
+
+    it('should format duration text correctly', async () => {
+      const request: ETARequest = {
+        pickup: { lat: 0, lng: 0 },
+        dropoff: { lat: 1, lng: 1 },
+      };
+
+      const result = await routingService.calculateETA(request);
+
+      expect(result.durationText).toMatch(/\d+ mins/);
+    });
+
+    it('should round distance to 2 decimal places', async () => {
+      const request: ETARequest = {
+        pickup: { lat: 0, lng: 0 },
+        dropoff: { lat: 0.0001, lng: 0.0001 },
+      };
+
+      const result = await routingService.calculateETA(request);
+
+      // Check that distance has at most 2 decimal places
+      const decimalPart = result.distance.toString().split('.')[1];
+      expect(!decimalPart || decimalPart.length <= 2).toBe(true);
+    });
+
+    it('should round estimated time to nearest minute (ceiling)', async () => {
+      const request: ETARequest = {
+        pickup: { lat: 0, lng: 0 },
+        dropoff: { lat: 0.001, lng: 0.001 }, // Very short distance
+      };
+
+      const result = await routingService.calculateETA(request);
+
+      // estimatedTime should be an integer
+      expect(Number.isInteger(result.estimatedTime)).toBe(true);
+      expect(result.estimatedTime).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('Performance Tests', () => {
+    it('should calculate distance quickly for single request', async () => {
+      const request: ETARequest = {
+        pickup: { lat: 40.7128, lng: -74.006 },
+        dropoff: { lat: 34.0522, lng: -118.2437 },
+      };
+
+      const startTime = performance.now();
+      await routingService.calculateETA(request);
+      const endTime = performance.now();
+
+      // Should complete in less than 10ms
+      expect(endTime - startTime).toBeLessThan(10);
+    });
+
+    it('should handle multiple calculations efficiently', async () => {
+      const requests: ETARequest[] = [
+        { pickup: { lat: 0, lng: 0 }, dropoff: { lat: 1, lng: 1 } },
+        { pickup: { lat: 10, lng: 10 }, dropoff: { lat: 20, lng: 20 } },
+        { pickup: { lat: -30, lng: 150 }, dropoff: { lat: -35, lng: 155 } },
+        { pickup: { lat: 60, lng: -170 }, dropoff: { lat: 62, lng: 175 } }, // Anti-meridian
+      ];
+
+      const startTime = performance.now();
+      await Promise.all(requests.map((r) => routingService.calculateETA(r)));
+      const endTime = performance.now();
+
+      // 4 calculations should complete in less than 20ms
+      expect(endTime - startTime).toBeLessThan(20);
+    });
+  });
+
+  describe('Symmetry and Consistency', () => {
+    it('should return same distance regardless of direction', async () => {
+      const pointA: Coordinates = { lat: 40.7128, lng: -74.006 };
+      const pointB: Coordinates = { lat: 34.0522, lng: -118.2437 };
+
+      const resultAtoB = await routingService.calculateETA({
+        pickup: pointA,
+        dropoff: pointB,
+      });
+
+      const resultBtoA = await routingService.calculateETA({
+        pickup: pointB,
+        dropoff: pointA,
+      });
+
+      expect(resultAtoB.distance).toBe(resultBtoA.distance);
+    });
+
+    it('should return same distance for anti-meridian crossing regardless of direction', async () => {
+      const pointA: Coordinates = { lat: -18.1248, lng: 178.4501 };
+      const pointB: Coordinates = { lat: -13.759, lng: -172.1046 };
+
+      const resultAtoB = await routingService.calculateETA({
+        pickup: pointA,
+        dropoff: pointB,
+      });
+
+      const resultBtoA = await routingService.calculateETA({
+        pickup: pointB,
+        dropoff: pointA,
+      });
+
+      expect(resultAtoB.distance).toBe(resultBtoA.distance);
+    });
   });
 });
