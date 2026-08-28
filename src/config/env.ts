@@ -26,6 +26,16 @@ interface EnvConfig {
   PROFILE_PICTURE_WIDTH?: string;
   PROFILE_PICTURE_HEIGHT?: string;
   PROFILE_PICTURE_QUALITY?: string;
+
+  // ── Soroban RPC retry config ────────────────────────────────────────────────
+  /** Maximum attempts (including the first) for generic RPC retries. Default: 3 */
+  SOROBAN_RPC_MAX_RETRIES: number;
+  /** Base delay (ms) for RPC exponential backoff. Default: 250 */
+  SOROBAN_RPC_RETRY_BASE_MS: number;
+  /** Maximum delay (ms) cap for RPC exponential backoff. Default: 8000 */
+  SOROBAN_RPC_RETRY_MAX_MS: number;
+  /** Maximum attempts to retry a transaction that fails with tx_bad_seq. Default: 3 */
+  STELLAR_BAD_SEQ_MAX_RETRIES: number;
 }
 
 const envSchema = z.object({
@@ -51,6 +61,12 @@ const envSchema = z.object({
   PROFILE_PICTURE_WIDTH: z.string().optional(),
   PROFILE_PICTURE_HEIGHT: z.string().optional(),
   PROFILE_PICTURE_QUALITY: z.string().optional(),
+
+  // ── Soroban RPC retry config ────────────────────────────────────────────────
+  SOROBAN_RPC_MAX_RETRIES: z.coerce.number().int().min(1).max(20).default(3),
+  SOROBAN_RPC_RETRY_BASE_MS: z.coerce.number().int().min(50).default(250),
+  SOROBAN_RPC_RETRY_MAX_MS: z.coerce.number().int().min(500).default(8000),
+  STELLAR_BAD_SEQ_MAX_RETRIES: z.coerce.number().int().min(1).max(10).default(3),
 });
 
 let env: EnvConfig;

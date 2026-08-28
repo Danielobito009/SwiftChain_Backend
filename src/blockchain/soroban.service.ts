@@ -1,28 +1,22 @@
 import { rpc as StellarRpc } from '@stellar/stellar-sdk';
+import CircuitBreaker from 'opossum';
 import logger from '../config/logger';
 import { sorobanRpcClient, stellarConfig } from '../config/stellar';
 import env from '../config/env';
 import { withRetry, RetryOptions } from '../utils/rpcRetry';
+import { createCircuitBreaker, fireWithBreaker } from '../utils/circuitBreaker';
 
 /**
  * Result returned by a successful connectivity check.
  */
 export interface ConnectivityCheckResult {
-  /** Whether the RPC node is reachable and healthy. */
   connected: boolean;
-  /** Human-readable network alias. */
   network: string;
-  /** Network passphrase used. */
   networkPassphrase: string;
-  /** RPC endpoint that was queried. */
   rpcUrl: string;
-  /** Health status string returned by the node (e.g. "healthy"). */
   status: string;
-  /** Latest ledger number at time of check. */
   latestLedger: number;
-  /** ISO timestamp of when the check was performed. */
   checkedAt: string;
-  /** Round-trip latency in milliseconds. */
   latencyMs: number;
 }
 
@@ -38,26 +32,62 @@ export interface ConnectivityCheckError {
 }
 
 /**
+ * Degraded ledger response returned when the Soroban circuit is OPEN.
+ * Controllers should treat `degraded: true` as a signal to surface a 503.
+ */
+export interface DegradedLedgerResult {
+  degraded: true;
+  reason: string;
+}
+
+/**
  * SorobanService provides the business-logic layer for all Stellar / Soroban
- * RPC interactions.
+ * RPC interactions, protected by a shared circuit breaker.
  *
- * Responsibilities:
- *   - Perform a live connectivity check against the configured RPC node.
- *   - Surface health, network, and ledger data for API responses.
- *   - Abstract the raw SDK client behind a typed interface so higher layers
- *     (controllers, other services) are decoupled from the SDK.
+ * Circuit-breaker behaviour:
+ *   - CLOSED    — RPC calls are executed normally (with retry).
+ *   - OPEN      — calls are short-circuited; fallback values are returned
+ *                 immediately so the API stays responsive.
+ *   - HALF-OPEN — one probe call is allowed through to test recovery.
+ *
+ * The circuit breaker wraps individual RPC calls rather than the service
+ * methods themselves, so that `checkConnectivity()` — which already handles
+ * its own errors — is not double-wrapped.
  */
 export class SorobanService {
   private readonly client: StellarRpc.Server;
 
+  /**
+   * Shared circuit breaker for all Soroban RPC operations.
+   * Typed as `CircuitBreaker<[() => Promise<unknown>], unknown>` because we
+   * use `fireWithBreaker` to pass a different action on each call.
+   */
+  private readonly breaker: CircuitBreaker<[() => Promise<unknown>], unknown>;
+
   constructor(client: StellarRpc.Server = sorobanRpcClient) {
     this.client = client;
+
+    this.breaker = createCircuitBreaker<[() => Promise<unknown>], unknown>(
+      {
+        name: 'soroban-rpc',
+        errorThresholdPercentage: env.CB_SOROBAN_ERROR_THRESHOLD_PERCENTAGE,
+        rollingWindowMs: env.CB_SOROBAN_ROLLING_WINDOW_MS,
+        resetTimeoutMs: env.CB_SOROBAN_RESET_TIMEOUT_MS,
+        volumeThreshold: env.CB_SOROBAN_VOLUME_THRESHOLD,
+        timeoutMs: env.CB_SOROBAN_TIMEOUT_MS,
+      },
+      // Fallback: return a sentinel so callers know the result is degraded.
+      (): DegradedLedgerResult => ({
+        degraded: true,
+        reason:
+          'Soroban RPC circuit is OPEN — the node is temporarily unreachable. ' +
+          'The system will automatically retry when the circuit recovers.',
+      }),
+    );
   }
 
-  /**
-   * Retry configuration derived from environment settings, shared by every
-   * RPC call this service makes.
-   */
+  // ── Retry configuration ──────────────────────────────────────────────────────
+
   private get retryOptions(): Pick<RetryOptions, 'maxAttempts' | 'baseDelayMs' | 'maxDelayMs'> {
     return {
       maxAttempts: env.SOROBAN_RPC_MAX_RETRIES,
@@ -67,22 +97,33 @@ export class SorobanService {
   }
 
   /**
-   * Wrap a Soroban RPC call with exponential-backoff retry so transient
-   * failures (rate limiting, temporary node outages) are absorbed instead
-   * of propagating on the first failure.
+   * Wrap a Soroban RPC call with:
+   *   1. Exponential-backoff retry (absorbs transient failures / rate limits).
+   *   2. Circuit breaker (trips when sustained failures exceed the threshold).
    */
-  private callWithRetry<T>(operationName: string, fn: () => Promise<T>): Promise<T> {
-    return withRetry(fn, { ...this.retryOptions, operationName });
+  private async callWithRetryAndBreaker<T>(
+    operationName: string,
+    fn: () => Promise<T>,
+  ): Promise<T | DegradedLedgerResult> {
+    const retryWrapped = (): Promise<T> =>
+      withRetry(fn, { ...this.retryOptions, operationName });
+
+    return fireWithBreaker(
+      this.breaker as CircuitBreaker<[() => Promise<T>], T | DegradedLedgerResult>,
+      (action: () => Promise<T>) => action(),
+      retryWrapped,
+    );
   }
 
+  // ── Public API ───────────────────────────────────────────────────────────────
+
   /**
-   * Perform a connectivity check against the Soroban RPC node.
+   * Perform a live connectivity check against the Soroban RPC node.
    *
-   * Calls `getHealth()` and `getLatestLedger()` in parallel. Both must
-   * succeed for the check to be considered healthy.
-   *
-   * @returns A `ConnectivityCheckResult` on success, or a
-   *          `ConnectivityCheckError` on failure.
+   * Calls `getHealth()` and `getLatestLedger()` in parallel.  The circuit
+   * breaker wraps each call individually so a single slow call doesn't block
+   * both.  This method never throws — it returns a typed error object on
+   * failure so callers can decide how to respond.
    */
   public async checkConnectivity(): Promise<ConnectivityCheckResult | ConnectivityCheckError> {
     const checkedAt = new Date().toISOString();
@@ -93,14 +134,37 @@ export class SorobanService {
     );
 
     try {
-      const [health, ledger] = await Promise.all([
-        this.callWithRetry('getHealth', () => this.client.getHealth()),
-        this.callWithRetry('getLatestLedger', () => this.client.getLatestLedger()),
+      const [healthResult, ledgerResult] = await Promise.all([
+        this.callWithRetryAndBreaker('getHealth', () => this.client.getHealth()),
+        this.callWithRetryAndBreaker('getLatestLedger', () => this.client.getLatestLedger()),
       ]);
 
+      // If either call returned a degraded sentinel the circuit is open.
+      if (
+        (healthResult as DegradedLedgerResult).degraded ||
+        (ledgerResult as DegradedLedgerResult).degraded
+      ) {
+        const latencyMs = Date.now() - start;
+        logger.warn(`[Soroban] Connectivity check degraded — circuit is OPEN`);
+        return {
+          connected: false,
+          network: stellarConfig.network,
+          rpcUrl: stellarConfig.rpcUrl,
+          checkedAt,
+          error: 'Soroban RPC circuit breaker is OPEN — node temporarily unreachable',
+        };
+      }
+
+      const health = healthResult as StellarRpc.Api.GetHealthResponse;
+      const ledger = ledgerResult as StellarRpc.Api.GetLatestLedgerResponse;
       const latencyMs = Date.now() - start;
 
-      const result: ConnectivityCheckResult = {
+      logger.info(
+        `[Soroban] Connectivity OK — network=${stellarConfig.network} ` +
+          `ledger=${ledger.sequence} latency=${latencyMs}ms`,
+      );
+
+      return {
         connected: true,
         network: stellarConfig.network,
         networkPassphrase: stellarConfig.networkPassphrase,
@@ -110,13 +174,6 @@ export class SorobanService {
         checkedAt,
         latencyMs,
       };
-
-      logger.info(
-        `[Soroban] Connectivity OK — network=${stellarConfig.network} ` +
-          `ledger=${ledger.sequence} latency=${latencyMs}ms`,
-      );
-
-      return result;
     } catch (err) {
       const latencyMs = Date.now() - start;
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -126,36 +183,52 @@ export class SorobanService {
           `latency=${latencyMs}ms error="${message}"`,
       );
 
-      const errorResult: ConnectivityCheckError = {
+      return {
         connected: false,
         network: stellarConfig.network,
         rpcUrl: stellarConfig.rpcUrl,
         checkedAt,
         error: message,
       };
-
-      return errorResult;
     }
   }
 
   /**
    * Fetch the latest ledger sequence number from the RPC node.
    *
-   * @returns The ledger sequence number.
-   * @throws  If the RPC call fails.
+   * @returns The ledger sequence number, or a {@link DegradedLedgerResult}
+   *          when the circuit is OPEN.
+   * @throws  When the RPC call fails and the circuit breaker's fallback itself
+   *          throws (should not happen in practice).
    */
-  public async getLatestLedger(): Promise<number> {
-    const ledger = await this.callWithRetry('getLatestLedger', () => this.client.getLatestLedger());
-    return ledger.sequence;
+  public async getLatestLedger(): Promise<number | DegradedLedgerResult> {
+    const result = await this.callWithRetryAndBreaker(
+      'getLatestLedger',
+      () => this.client.getLatestLedger(),
+    );
+
+    if ((result as DegradedLedgerResult).degraded) {
+      return result as DegradedLedgerResult;
+    }
+
+    return (result as StellarRpc.Api.GetLatestLedgerResponse).sequence;
   }
 
   /**
    * Fetch network information (passphrase, protocol version) from the RPC node.
    *
-   * @returns The raw `getNetwork` response from the SDK.
+   * @returns The raw `getNetwork` response, or a {@link DegradedLedgerResult}
+   *          when the circuit is OPEN.
    */
-  public async getNetworkInfo(): Promise<StellarRpc.Api.GetNetworkResponse> {
-    return this.callWithRetry('getNetwork', () => this.client.getNetwork());
+  public async getNetworkInfo(): Promise<
+    StellarRpc.Api.GetNetworkResponse | DegradedLedgerResult
+  > {
+    const result = await this.callWithRetryAndBreaker(
+      'getNetwork',
+      () => this.client.getNetwork(),
+    );
+
+    return result as StellarRpc.Api.GetNetworkResponse | DegradedLedgerResult;
   }
 }
 
