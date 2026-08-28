@@ -4,8 +4,11 @@ import { validateRequest } from '../middlewares/validateRequest';
 import {
   createDeliverySchema,
   updateDeliverySchema,
+  assignDriverSchema,
 } from '../validators/deliveryValidator';
-import { requireIdempotencyKey } from '../middlewares/idempotency';
+import authenticate from '../middleware/authenticate';
+import requireRole from '../middleware/requireRole';
+import { UserRole } from '../interfaces/IUser';
 
 const router = Router();
 
@@ -174,6 +177,86 @@ router.patch(
   '/:id',
   validateRequest({ body: updateDeliverySchema }),
   deliveryController.update.bind(deliveryController)
+);
+
+/**
+ * @openapi
+ * /v1/deliveries/{id}/assign-driver:
+ *   patch:
+ *     tags: [Deliveries]
+ *     summary: Assign a driver to a delivery
+ *     description: |
+ *       Assigns a driver to a delivery **only when the Soroban escrow contract
+ *       for that delivery is fully initialised** (lockStatus = LOCKED).
+ *
+ *       The endpoint enforces the following guard rules in order:
+ *         1. Delivery must exist.
+ *         2. Delivery must not be in a terminal state (completed / cancelled).
+ *         3. Delivery must not already have a driver assigned.
+ *         4. An Escrow record must exist for the delivery.
+ *         5. The escrow `lockStatus` must be `LOCKED` — pending, released,
+ *            refunded or disputed escrows are all rejected with clear messages.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: MongoDB ObjectId of the delivery
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [driverId]
+ *             properties:
+ *               driverId:
+ *                 type: string
+ *                 description: The driver identifier to assign
+ *     responses:
+ *       200:
+ *         description: Driver assigned — delivery status advanced to ASSIGNED
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/DeliveryResponse'
+ *       400:
+ *         description: Invalid delivery id or missing / invalid driverId
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       409:
+ *         description: |
+ *           Delivery is already assigned, completed or cancelled; OR the
+ *           escrow exists but its lockStatus is not LOCKED (pending / released
+ *           / refunded / disputed).
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       422:
+ *         description: No escrow record found — escrow contract was never initialised
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.patch(
+  '/:id/assign-driver',
+  authenticate,
+  requireRole(UserRole.ADMIN),
+  validateRequest({ body: assignDriverSchema }),
+  deliveryController.assignDriver.bind(deliveryController),
 );
 
 /**
