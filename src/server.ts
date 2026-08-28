@@ -5,11 +5,14 @@ import logger from './config/logger';
 import { startIndexerLagMonitor } from './services/monitorService';
 import {
   initializeSocketServer,
-  shutdownSocketServer,
   TypedServer,
 } from './sockets/connectionHandler';
-import { startEscrowMonitorJob, stopEscrowMonitorJob } from './jobs/escrowMonitor';
-import { startEventPoller, stopEventPoller } from './services/eventPoller';
+import { startEscrowMonitorJob } from './jobs/escrowMonitor';
+import { startEventPoller } from './services/eventPoller';
+import {
+  GracefulShutdownService,
+  registerShutdownHandlers,
+} from './services/gracefulShutdownService';
 
 dotenv.config();
 
@@ -33,16 +36,8 @@ if (process.env.NODE_ENV !== 'test') {
   startEventPoller();
 }
 
-const gracefulShutdown = (): void => {
-  logger.info('Shutting down gracefully...');
-  stopEventPoller();
-  stopEscrowMonitorJob();
-  shutdownSocketServer(io)
-    .catch((error) =>
-      logger.error('Error shutting down Socket.IO server:', error)
-    )
-    .finally(() => process.exit(0));
-};
+// Controller entry: OS signals → GracefulShutdownService → DB / sockets.
+const shutdownService = new GracefulShutdownService({ httpServer, io });
+registerShutdownHandlers(shutdownService);
 
-process.on('SIGTERM', gracefulShutdown);
-process.on('SIGINT', gracefulShutdown);
+export { httpServer, io, shutdownService };

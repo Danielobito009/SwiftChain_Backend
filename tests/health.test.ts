@@ -4,6 +4,10 @@ import app from '../src/app';
 // Mock the database connection to prevent open handles during tests
 jest.mock('../src/config/database', () => ({
   connectDatabase: jest.fn(),
+  disconnectDatabase: jest.fn(),
+  waitForActiveTransactions: jest.fn(),
+  startTrackedSession: jest.fn(),
+  getActiveTransactionCount: jest.fn().mockReturnValue(0),
 }));
 
 // Mock the logger to keep test output clean
