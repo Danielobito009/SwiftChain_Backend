@@ -1,42 +1,60 @@
 import Redis from 'ioredis';
-import env from './env';
 import logger from './logger';
 
+let client: Redis | null = null;
+
 /**
- * Lazily-created Redis client singleton.
- *
- * The client is only instantiated when REDIS_URL is present in the
- * environment.  When absent, `redisClient` is `null` and the idempotency
- * service falls back to the MongoDB-backed store automatically.
- *
- * Connection errors are logged but never crash the process — the fallback
- * path ensures the API keeps running even if Redis is temporarily unavailable.
+ * Return a shared Redis client when REDIS_URL is configured.
+ * Returns null when caching is disabled (no URL), allowing callers to
+ * fall back to live API calls without failing the request path.
  */
-let redisClient: Redis | null = null;
+export function getRedisClient(): Redis | null {
+  const redisUrl = process.env.REDIS_URL?.trim();
+  if (!redisUrl) {
+    return null;
+  }
 
-if (env.REDIS_URL) {
-  redisClient = new Redis(env.REDIS_URL, {
-    // Retry with exponential back-off, capped at 10 s, up to 10 attempts.
-    retryStrategy: (times: number): number | null => {
-      if (times > 10) {
-        logger.error('[Redis] Max reconnection attempts reached — giving up');
-        return null; // stop retrying
-      }
-      return Math.min(times * 200, 10_000);
-    },
-    // Surface connection errors rather than swallowing them silently.
-    enableOfflineQueue: false,
-    lazyConnect: false,
-    maxRetriesPerRequest: 3,
-  });
+  if (!client) {
+    client = new Redis(redisUrl, {
+      maxRetriesPerRequest: 1,
+      lazyConnect: true,
+      enableOfflineQueue: false,
+    });
 
-  redisClient.on('connect', () => logger.info('[Redis] Connected'));
-  redisClient.on('ready', () => logger.info('[Redis] Ready'));
-  redisClient.on('error', (err: Error) => logger.error('[Redis] Error:', err.message));
-  redisClient.on('close', () => logger.warn('[Redis] Connection closed'));
-  redisClient.on('reconnecting', () => logger.info('[Redis] Reconnecting…'));
-} else {
-  logger.info('[Redis] REDIS_URL not set — idempotency will use MongoDB fallback store');
+    client.on('error', (error) => {
+      logger.error('[Redis] Connection error:', error);
+    });
+  }
+
+  return client;
 }
 
-export default redisClient;
+/** Establish the Redis connection at process startup. */
+export async function connectRedis(): Promise<void> {
+  const redis = getRedisClient();
+  if (!redis) {
+    logger.info('[Redis] REDIS_URL not set — ETA caching disabled');
+    return;
+  }
+
+  if (redis.status === 'ready') {
+    return;
+  }
+
+  await redis.connect();
+  logger.info('[Redis] Connected for ETA caching');
+}
+
+/** Close the Redis connection during graceful shutdown. */
+export async function disconnectRedis(): Promise<void> {
+  if (client) {
+    await client.quit();
+    client = null;
+    logger.info('[Redis] Connection closed');
+  }
+}
+
+/** Test helper — reset the singleton between unit tests. */
+export function resetRedisClientForTests(): void {
+  client = null;
+}

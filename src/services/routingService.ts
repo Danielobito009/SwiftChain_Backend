@@ -1,37 +1,14 @@
 import axios from 'axios';
-import CircuitBreaker from 'opossum';
-import env from '../config/env';
 import logger from '../config/logger';
-import { createCircuitBreaker } from '../utils/circuitBreaker';
+import { etaCacheService } from './etaCacheService';
+import {
+  Coordinates,
+  ETARequest,
+  ETAResponse,
+  TravelMode,
+} from '../types/routing.types';
 
-export interface Coordinates {
-  lat: number;
-  lng: number;
-}
-
-export interface RouteInfo {
-  distance: number;
-  duration: number;
-  distanceText: string;
-  durationText: string;
-}
-
-export interface ETARequest {
-  pickup: Coordinates;
-  dropoff: Coordinates;
-  travelMode?: 'driving' | 'walking' | 'bicycling' | 'transit';
-}
-
-export interface ETAResponse {
-  estimatedTime: number;
-  distance: number;
-  durationText: string;
-  distanceText: string;
-  route: RouteInfo;
-  /** True when the response was produced by the Haversine fallback rather
-   *  than the live Google Maps API (circuit open or API key absent). */
-  isFallback: boolean;
-}
+export type { Coordinates, ETARequest, ETAResponse, RouteInfo, TravelMode } from '../types/routing.types';
 
 /**
  * RoutingService wraps the Google Maps Directions API behind a circuit
@@ -56,9 +33,7 @@ class RoutingService {
     this.baseUrl = 'https://maps.googleapis.com/maps/api/directions/json';
 
     if (!this.apiKey) {
-      logger.warn(
-        '[RoutingService] GOOGLE_MAPS_API_KEY not configured — Haversine fallback will be used.',
-      );
+      logger.warn('Google Maps API key not configured — using Haversine fallback for ETA');
     }
 
     // Build the circuit breaker.  The fallback function receives the same
@@ -89,38 +64,44 @@ class RoutingService {
       this.callGoogleMapsApi(request);
   }
 
-  // ── Public API ─────────────────────────────────────────────────────────────
-
   /**
-   * Calculate the estimated travel time and distance between two coordinates.
-   *
-   * When `GOOGLE_MAPS_API_KEY` is present the call is routed through the
-   * circuit breaker:
-   *   • Successful → live Google Maps result (`isFallback: false`)
-   *   • Circuit OPEN or API error → Haversine estimate (`isFallback: true`)
-   *
-   * When the key is absent the Haversine path is taken directly.
-   *
-   * @throws {Error} Only when both the API call and the fallback throw — in
-   *   practice the fallback is pure computation and should never throw.
+   * Calculate delivery ETA, checking Redis cache before calling external APIs.
    */
   async calculateETA(request: ETARequest): Promise<ETAResponse> {
-    if (!this.apiKey) {
-      // No API key — skip the circuit breaker entirely.
-      return { ...this.calculateWithHaversine(request), isFallback: true };
-    }
+    const travelMode = request.travelMode ?? 'driving';
 
     try {
-      return await this.breaker.fire(request);
+      const cached = await etaCacheService.get({
+        pickup: request.pickup,
+        dropoff: request.dropoff,
+        travelMode,
+      });
+
+      if (cached) {
+        return cached;
+      }
+
+      const result = await this.calculateFresh({ ...request, travelMode });
+      await etaCacheService.set({ pickup: request.pickup, dropoff: request.dropoff, travelMode }, result);
+
+      return result;
     } catch (error) {
-      // If even the fallback threw (shouldn't happen), surface it clearly.
-      const message = error instanceof Error ? error.message : String(error);
-      logger.error(`[RoutingService] ETA calculation failed entirely: ${message}`);
+      logger.error('Failed to calculate ETA:', error);
       throw new Error('Failed to calculate delivery ETA');
     }
   }
 
-  // ── Protected action (runs inside the circuit breaker) ──────────────────────
+  private async calculateFresh(request: ETARequest & { travelMode: TravelMode }): Promise<ETAResponse> {
+    if (this.apiKey) {
+      return this.calculateWithGoogleMaps(request);
+    }
+    return this.calculateWithHaversine(request);
+  }
+
+  private async calculateWithGoogleMaps(
+    request: ETARequest & { travelMode: TravelMode },
+  ): Promise<ETAResponse> {
+    const { pickup, dropoff, travelMode } = request;
 
   /**
    * Make the live Google Maps Directions API request.
@@ -163,15 +144,13 @@ class RoutingService {
     };
   }
 
-  // ── Haversine fallback (pure, no network calls) ─────────────────────────────
-
-  private calculateWithHaversine(request: ETARequest): Omit<ETAResponse, 'isFallback'> {
-    const { pickup, dropoff, travelMode = 'driving' } = request;
+  private calculateWithHaversine(request: ETARequest & { travelMode: TravelMode }): ETAResponse {
+    const { pickup, dropoff, travelMode } = request;
 
     const distance = this.haversineDistanceMeters(pickup, dropoff);
     const distanceKm = distance / 1000;
 
-    const speeds: Record<string, number> = {
+    const speeds: Record<TravelMode, number> = {
       driving: 40,
       walking: 5,
       bicycling: 15,

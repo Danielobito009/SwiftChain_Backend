@@ -7,12 +7,9 @@ import {
   initializeSocketServer,
   TypedServer,
 } from './sockets/connectionHandler';
-import { startEscrowMonitorJob } from './jobs/escrowMonitor';
-import { startEventPoller } from './services/eventPoller';
-import {
-  GracefulShutdownService,
-  registerShutdownHandlers,
-} from './services/gracefulShutdownService';
+import { startEscrowMonitorJob, stopEscrowMonitorJob } from './jobs/escrowMonitor';
+import { startEventPoller, stopEventPoller } from './services/eventPoller';
+import { connectRedis, disconnectRedis } from './config/redis';
 
 dotenv.config();
 
@@ -34,10 +31,23 @@ httpServer.listen(PORT, () => {
 if (process.env.NODE_ENV !== 'test') {
   startEscrowMonitorJob();
   startEventPoller();
+  void connectRedis().catch((error) => {
+    logger.error('Failed to connect to Redis:', error);
+  });
 }
 
-// Controller entry: OS signals → GracefulShutdownService → DB / sockets.
-const shutdownService = new GracefulShutdownService({ httpServer, io });
-registerShutdownHandlers(shutdownService);
+const gracefulShutdown = (): void => {
+  logger.info('Shutting down gracefully...');
+  stopEventPoller();
+  stopEscrowMonitorJob();
+  shutdownSocketServer(io)
+    .catch((error) =>
+      logger.error('Error shutting down Socket.IO server:', error)
+    )
+    .then(() => disconnectRedis())
+    .catch((error) => logger.error('Error disconnecting Redis:', error))
+    .finally(() => process.exit(0));
+};
 
-export { httpServer, io, shutdownService };
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
