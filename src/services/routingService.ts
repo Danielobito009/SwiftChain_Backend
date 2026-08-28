@@ -1,30 +1,14 @@
 import axios from 'axios';
+import logger from '../config/logger';
+import { etaCacheService } from './etaCacheService';
+import {
+  Coordinates,
+  ETARequest,
+  ETAResponse,
+  TravelMode,
+} from '../types/routing.types';
 
-export interface Coordinates {
-  lat: number;
-  lng: number;
-}
-
-export interface RouteInfo {
-  distance: number;
-  duration: number;
-  distanceText: string;
-  durationText: string;
-}
-
-export interface ETARequest {
-  pickup: Coordinates;
-  dropoff: Coordinates;
-  travelMode?: 'driving' | 'walking' | 'bicycling' | 'transit';
-}
-
-export interface ETAResponse {
-  estimatedTime: number;
-  distance: number;
-  durationText: string;
-  distanceText: string;
-  route: RouteInfo;
-}
+export type { Coordinates, ETARequest, ETAResponse, RouteInfo, TravelMode } from '../types/routing.types';
 
 class RoutingService {
   private readonly apiKey: string;
@@ -35,26 +19,48 @@ class RoutingService {
     this.baseUrl = 'https://maps.googleapis.com/maps/api/directions/json';
 
     if (!this.apiKey) {
-      // eslint-disable-next-line no-console
-      console.warn('⚠️ Google Maps API key not configured. Using fallback calculation.');
+      logger.warn('Google Maps API key not configured — using Haversine fallback for ETA');
     }
   }
 
+  /**
+   * Calculate delivery ETA, checking Redis cache before calling external APIs.
+   */
   async calculateETA(request: ETARequest): Promise<ETAResponse> {
+    const travelMode = request.travelMode ?? 'driving';
+
     try {
-      if (this.apiKey) {
-        return await this.calculateWithGoogleMaps(request);
+      const cached = await etaCacheService.get({
+        pickup: request.pickup,
+        dropoff: request.dropoff,
+        travelMode,
+      });
+
+      if (cached) {
+        return cached;
       }
-      return this.calculateWithHaversine(request);
+
+      const result = await this.calculateFresh({ ...request, travelMode });
+      await etaCacheService.set({ pickup: request.pickup, dropoff: request.dropoff, travelMode }, result);
+
+      return result;
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Failed to calculate ETA:', error);
+      logger.error('Failed to calculate ETA:', error);
       throw new Error('Failed to calculate delivery ETA');
     }
   }
 
-  private async calculateWithGoogleMaps(request: ETARequest): Promise<ETAResponse> {
-    const { pickup, dropoff, travelMode = 'driving' } = request;
+  private async calculateFresh(request: ETARequest & { travelMode: TravelMode }): Promise<ETAResponse> {
+    if (this.apiKey) {
+      return this.calculateWithGoogleMaps(request);
+    }
+    return this.calculateWithHaversine(request);
+  }
+
+  private async calculateWithGoogleMaps(
+    request: ETARequest & { travelMode: TravelMode },
+  ): Promise<ETAResponse> {
+    const { pickup, dropoff, travelMode } = request;
 
     const params = {
       origin: `${pickup.lat},${pickup.lng}`,
@@ -87,20 +93,20 @@ class RoutingService {
     };
   }
 
-  private calculateWithHaversine(request: ETARequest): ETAResponse {
-    const { pickup, dropoff, travelMode = 'driving' } = request;
+  private calculateWithHaversine(request: ETARequest & { travelMode: TravelMode }): ETAResponse {
+    const { pickup, dropoff, travelMode } = request;
 
     const distance = this.calculateHaversineDistance(pickup, dropoff);
     const distanceKm = distance / 1000;
 
-    const speeds: Record<string, number> = {
+    const speeds: Record<TravelMode, number> = {
       driving: 40,
       walking: 5,
       bicycling: 15,
       transit: 25,
     };
 
-    const speed = speeds[travelMode] || 40;
+    const speed = speeds[travelMode] ?? 40;
     const durationMinutes = (distanceKm / speed) * 60;
 
     return {

@@ -10,6 +10,7 @@ import {
 } from './sockets/connectionHandler';
 import { startEscrowMonitorJob, stopEscrowMonitorJob } from './jobs/escrowMonitor';
 import { startEventPoller, stopEventPoller } from './services/eventPoller';
+import { connectRedis, disconnectRedis } from './config/redis';
 
 dotenv.config();
 
@@ -31,6 +32,9 @@ httpServer.listen(PORT, () => {
 if (process.env.NODE_ENV !== 'test') {
   startEscrowMonitorJob();
   startEventPoller();
+  void connectRedis().catch((error) => {
+    logger.error('Failed to connect to Redis:', error);
+  });
 }
 
 const gracefulShutdown = (): void => {
@@ -41,6 +45,8 @@ const gracefulShutdown = (): void => {
     .catch((error) =>
       logger.error('Error shutting down Socket.IO server:', error)
     )
+    .then(() => disconnectRedis())
+    .catch((error) => logger.error('Error disconnecting Redis:', error))
     .finally(() => process.exit(0));
 };
 
