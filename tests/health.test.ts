@@ -245,7 +245,7 @@ describe('GET /api/v1/health', () => {
     const res = await request(app).get('/api/v1/health');
 
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe('success');
+    expect(res.body.success).toBe(true);
   });
 
   it('200 response includes data.status = "healthy"', async () => {
@@ -258,7 +258,7 @@ describe('GET /api/v1/health', () => {
     const res = await request(app).get('/api/v1/health');
 
     expect(res.body).toMatchObject({
-      status: 'success',
+      success: true,
       data: {
         status: 'healthy',
         services: {
@@ -300,7 +300,7 @@ describe('GET /api/v1/health', () => {
     const res = await request(app).get('/api/v1/health');
 
     expect(res.status).toBe(503);
-    expect(res.body.status).toBe('error');
+    expect(res.body.success).toBe(false);
   });
 
   it('503 response includes data.status = "degraded" when MongoDB is disconnected', async () => {
@@ -328,7 +328,7 @@ describe('GET /api/v1/health', () => {
     const res = await request(app).get('/api/v1/health');
 
     expect(res.status).toBe(503);
-    expect(res.body.status).toBe('error');
+    expect(res.body.success).toBe(false);
   });
 
   it('503 response includes stellarRpc.status = "unhealthy" when RPC is down', async () => {
@@ -386,7 +386,7 @@ describe('GET /api/v1/health', () => {
 
     // Circuit-breakers route returns 200 or 206; definitely not 404 or 500.
     expect([200, 206]).toContain(res.status);
-    expect(res.body).toHaveProperty('status', 'success');
+    expect(res.body).toHaveProperty('success', true);
     expect(res.body.data).toHaveProperty('breakers');
   });
 });

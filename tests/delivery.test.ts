@@ -68,7 +68,7 @@ describe('Delivery API — POST /api/v1/deliveries', () => {
     const res = await request(app).post('/api/v1/deliveries').send(mockDeliveryInput);
 
     expect(res.status).toBe(201);
-    expect(res.body.status).toBe('success');
+    expect(res.body.success).toBe(true);
     expect(res.body.data.trackingNumber).toBe('SWIFT-001');
     expect(res.body.data.isDeleted).toBe(false);
     expect(res.body.data).not.toHaveProperty('__v');
@@ -79,14 +79,14 @@ describe('Delivery API — POST /api/v1/deliveries', () => {
     const res = await request(app).post('/api/v1/deliveries').send(mockDeliveryInput);
 
     expect(res.status).toBe(409);
-    expect(res.body.status).toBe('error');
+    expect(res.body.success).toBe(false);
   });
 
   it('should reject invalid input (missing required fields)', async () => {
     const res = await request(app).post('/api/v1/deliveries').send({});
 
     expect(res.status).toBe(500);
-    expect(res.body.status).toBe('error');
+    expect(res.body.success).toBe(false);
   });
 });
 
