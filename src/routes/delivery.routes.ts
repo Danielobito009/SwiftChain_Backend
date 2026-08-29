@@ -9,6 +9,7 @@ import {
 import authenticate from '../middleware/authenticate';
 import requireRole from '../middleware/requireRole';
 import { UserRole } from '../interfaces/IUser';
+import { requireIdempotencyKey } from '../middlewares/idempotency';
 
 const router = Router();
 

@@ -86,7 +86,7 @@ const errorHandler = (
     `${error.statusCode} - ${error.message} - ${req.originalUrl} - ${req.method} - ${req.ip}`,
   );
 
-  if (env.NODE_ENV === 'development') {
+  if (env.NODE_ENV === 'development' || env.NODE_ENV === 'test') {
     sendErrorDev(error, req, res);
   } else {
     sendErrorProd(error, req, res);
