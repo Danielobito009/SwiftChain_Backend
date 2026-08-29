@@ -43,6 +43,30 @@ export interface DisconnectPayload {
   connectedDurationMs: number;
 }
 
+/**
+ * Payload emitted on `auth_expired` when the server detects an expired
+ * or invalid JWT during an active socket session.
+ */
+export interface AuthExpiredPayload {
+  message: string;
+  gracePeriodMs: number;
+}
+
+/**
+ * Payload sent by the client on `auth_refresh` with a new JWT token.
+ */
+export interface AuthRefreshPayload {
+  token: string;
+}
+
+/**
+ * Acknowledgement emitted back on `auth_refresh_ack`.
+ */
+export interface AuthRefreshAckPayload {
+  success: boolean;
+  error?: string;
+}
+
 // ─── Offline sync types ───────────────────────────────────────────────────────
 
 /**
@@ -160,6 +184,10 @@ export interface ServerToClientEvents {
   'location:update': (payload: LocationBroadcastPayload) => void;
   /** Ack sent back to the driver after a live location update is processed. */
   location_update_ack: (payload: LocationUpdateAck) => void;
+  /** Emitted when the server detects an expired or invalid JWT during an active session. */
+  auth_expired: (payload: AuthExpiredPayload) => void;
+  /** Ack sent back after the client submits a refreshed JWT via `auth_refresh`. */
+  auth_refresh_ack: (payload: AuthRefreshAckPayload) => void;
 }
 
 /**
@@ -173,6 +201,8 @@ export interface ClientToServerEvents {
   location_sync: (payload: LocationSyncPayload) => void;
   /** Fired by driver to broadcast a live GPS fix to a delivery room. */
   driver_location_update: (payload: DriverLocationUpdatePayload) => void;
+  /** Fired by client to submit a refreshed JWT without reconnecting. */
+  auth_refresh: (payload: AuthRefreshPayload) => void;
 }
 
 /**
@@ -187,6 +217,7 @@ export interface InterServerEvents {
  */
 export interface SocketData {
   userId?: string;
+  token?: string;
   connectedAt: number;
 }
 
