@@ -16,6 +16,8 @@ export interface SocketConnectionMeta {
   missedPongs: number;
   /** Rooms the socket is currently a member of */
   rooms: string[];
+  /** Optional JWT expiration timestamp (ms since epoch) */
+  tokenExp?: number;
 }
 
 /**
@@ -160,6 +162,8 @@ export interface ServerToClientEvents {
   'location:update': (payload: LocationBroadcastPayload) => void;
   /** Ack sent back to the driver after a live location update is processed. */
   location_update_ack: (payload: LocationUpdateAck) => void;
+  /** Notify client that authentication token has expired */
+  auth_expired: () => void;
 }
 
 /**
@@ -188,6 +192,8 @@ export interface InterServerEvents {
 export interface SocketData {
   userId?: string;
   connectedAt: number;
+  /** JWT expiration timestamp in ms */
+  tokenExp?: number;
 }
 
 /**
