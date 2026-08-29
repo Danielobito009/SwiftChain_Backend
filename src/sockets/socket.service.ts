@@ -1,4 +1,5 @@
 import { Server as SocketIOServer } from 'socket.io';
+import authService from '../services/authService';
 import logger from '../config/logger';
 import {
   SocketConnectionMeta,
@@ -252,6 +253,55 @@ export class SocketService {
    */
   public getConnections(): ReadonlyMap<string, SocketConnectionMeta> {
     return this.connections;
+  }
+
+  /**
+   * Validate the JWT token stored on a socket's data against the database.
+   *
+   * Returns true if:
+   *   - The socket has no token/userId (unauthenticated, skip validation).
+   *   - The token is cryptographically valid, not expired, and references
+   *     an existing user whose account is active (not suspended/banned).
+   *
+   * Returns false if the token is missing, malformed, expired, or references
+   * an inactive/non-existent user.
+   *
+   * @param socket - The socket whose token should be validated.
+   * @returns       True if the token is valid (or absent), false otherwise.
+   */
+  public async validateSocketToken(socket: TypedSocket): Promise<boolean> {
+    const token = socket.data.token;
+    const userId = socket.data.userId;
+
+    if (!token || !userId) {
+      return true;
+    }
+
+    try {
+      const decoded = authService.verifyToken(token);
+      const user = await authService.getUserById(decoded.userId);
+
+      if (!user) {
+        logger.warn(`[Socket] Token validation failed — user not found for userId=${userId}`);
+        return false;
+      }
+
+      if (user.status === 'suspended' || user.status === 'banned') {
+        logger.warn(
+          `[Socket] Token validation failed — account ${user.status} for userId=${userId}`,
+        );
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      logger.warn(
+        `[Socket] Token validation failed for userId=${userId}: ${
+          error instanceof Error ? error.message : error
+        }`,
+      );
+      return false;
+    }
   }
 }
 
