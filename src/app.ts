@@ -16,8 +16,13 @@ import requestLogger from './middleware/requestLogger';
 import { requestTracker } from './middleware/requestTracker';
 import env from './config/env';
 import swaggerSpec from './docs/swagger';
+import { redisClient } from './config/redis';
+import { getContainer } from './di';
 
 dotenv.config();
+
+// Initialize DI container at application startup
+getContainer();
 
 const app = express();
 
