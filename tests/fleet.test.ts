@@ -91,7 +91,7 @@ describe('POST /api/v1/fleets', () => {
         .send({ name: 'City Logistics Fleet' });
 
       expect(res.status).toBe(201);
-      expect(res.body.status).toBe('success');
+      expect(res.body.success).toBe(true);
       expect(res.body.data.fleet.name).toBe('City Logistics Fleet');
     });
 

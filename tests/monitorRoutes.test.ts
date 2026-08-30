@@ -93,7 +93,7 @@ describe('GET /api/v1/monitor/indexer-lag', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe('success');
+    expect(res.body.success).toBe(true);
     expect(res.body.data).toMatchObject({
       network: 'testnet',
       processedLedger: 990,

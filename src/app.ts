@@ -9,6 +9,7 @@ import swaggerUi from 'swagger-ui-express';
 
 import routes from './routes';
 import logger from './config/logger';
+import { sendError } from './utils/responseWrapper';
 import { connectDatabase } from './config/database';
 import errorHandler from './middleware/errorHandler';
 import requestLogger from './middleware/requestLogger';
@@ -77,10 +78,7 @@ app.use('/uploads', express.static(path.join(process.cwd(), env.UPLOAD_LOCAL_DIR
 app.use('/api', routes);
 
 app.use((req, res): void => {
-  res.status(404).json({
-    success: false,
-    error: `Route ${req.path} not found`,
-  });
+  sendError(res, `Route ${req.path} not found`, 404);
 });
 
 // Connect to MongoDB but don't start the server here

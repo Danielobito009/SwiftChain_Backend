@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { Delivery } from '../models/deliveryModel';
 import type { DeliveryStatus } from '../models/deliveryModel';
 import { HttpError } from '../utils/httpError';
+import { sendSuccess } from '../utils/responseWrapper';
 
 const allowedStatuses: readonly DeliveryStatus[] = [
   'pending',
@@ -52,12 +53,8 @@ export const updateDeliveryStatus = async (
     delivery.status = nextStatus as DeliveryStatus;
     await delivery.save();
 
-    res.status(200).json({
-      status: 'success',
-      data: delivery,
-    });
+    sendSuccess(res, delivery, 'Delivery status updated successfully');
   } catch (error) {
     next(error as Error);
   }
 };
-
