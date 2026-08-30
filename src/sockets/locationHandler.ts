@@ -3,6 +3,7 @@ import authService from '../services/authService';
 import logger from '../config/logger';
 import { locationService, deliveryRoom } from './location.service';
 import { socketService } from './socket.service';
+import socketMetricsService from '../services/socketMetricsService';
 import {
   DriverLocationUpdatePayload,
   TypedSocket,
@@ -43,6 +44,7 @@ export function registerLocationHandler(io: TypedServer, socket: TypedSocket): v
   // ── driver_location_update ───────────────────────────────────────────────
   socket.on('driver_location_update', async (payload: DriverLocationUpdatePayload) => {
     const driverId = socket.data.userId;
+    const startTime = Date.now();
 
     // Auth guard
     if (!driverId) {
@@ -75,12 +77,22 @@ export function registerLocationHandler(io: TypedServer, socket: TypedSocket): v
 
     try {
       const ack = await locationService.processLiveUpdate(io, driverId, payload);
+
+      // Record message latency in metrics
+      const latencyMs = Date.now() - startTime;
+      socketMetricsService.recordMessageLatency(latencyMs);
+
       socket.emit('location_update_ack', ack);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unexpected error';
       logger.error(`[LocationHandler] Unexpected error — driverId=${driverId}: ${message}`, {
         stack: err instanceof Error ? err.stack : undefined,
       });
+
+      // Record latency even on error
+      const latencyMs = Date.now() - startTime;
+      socketMetricsService.recordMessageLatency(latencyMs);
+
       socket.emit('location_update_ack', { success: false, error: message });
     }
   });

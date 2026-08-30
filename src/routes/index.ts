@@ -11,6 +11,7 @@ import eventLogRoutes from './eventLogRoutes';
 import profileRoutes from './profileRoutes';
 import healthRoutes from './healthRoutes';
 import userRoutes from './userRoutes';
+import socketMetricsRoutes from './socketMetricsRoutes';
 
 const router = Router();
 
@@ -25,6 +26,7 @@ router.use('/v1/disputes', disputeRoutes);
 router.use('/v1/eventlog', eventLogRoutes);
 router.use('/v1/profile', profileRoutes);
 router.use('/v1/health', healthRoutes);
+router.use('/v1/socket-metrics', socketMetricsRoutes);
 router.use('/v1/users', userRoutes);
 
 export default router;
