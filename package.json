@@ -9,6 +9,7 @@
     "lint": "eslint . --ext .ts",
     "format": "prettier --write .",
     "test": "jest",
+    "test:coverage": "jest --coverage",
     "test:mutation": "stryker run",
     "prepare": "husky install"
   },
