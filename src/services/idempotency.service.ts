@@ -1,5 +1,5 @@
 import httpStatus from 'http-status-codes';
-import redisClient from '../config/redis';
+import { redisClient } from '../config/redis';
 import IdempotencyRecord, { IdempotencyStatus } from '../models/IdempotencyRecord';
 import env from '../config/env';
 import logger from '../config/logger';

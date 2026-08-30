@@ -3,6 +3,7 @@ import { StatusCodes } from 'http-status-codes';
 import { getFlaggedEscrows, resolveEscrow } from '../services/escrowService';
 import type { IUser } from '../interfaces/IUser';
 import AppError from '../utils/AppError';
+import { sendSuccess } from '../utils/responseWrapper';
 
 // ─── GET /api/v1/admin/escrows/flagged ─────────────────────────────────────────
 
@@ -32,10 +33,7 @@ export const listFlaggedEscrows = async (
 
     const result = await getFlaggedEscrows({ page, limit });
 
-    res.status(StatusCodes.OK).json({
-      status: 'success',
-      data: result,
-    });
+    sendSuccess(res, result, 'Flagged escrows retrieved successfully', StatusCodes.OK);
   } catch (error) {
     next(error);
   }
@@ -80,11 +78,7 @@ export const resolveFlaggedEscrow = async (
       notes: notes.trim(),
     });
 
-    res.status(StatusCodes.OK).json({
-      status: 'success',
-      message: 'Escrow has been resolved successfully.',
-      data: { escrow },
-    });
+    sendSuccess(res, { escrow }, 'Escrow has been resolved successfully.', StatusCodes.OK);
   } catch (error) {
     next(error);
   }
