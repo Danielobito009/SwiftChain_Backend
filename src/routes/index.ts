@@ -1,4 +1,3 @@
-// @ts-ignore: express types may be missing in this project setup
 import { Router } from 'express';
 import authRoutes from './authRoutes';
 import deliveryCrudRoutes from './delivery.routes';
@@ -31,5 +30,6 @@ router.use('/v1/eventlog', eventLogRoutes);
 router.use('/v1/profile', profileRoutes);
 router.use('/v1/notifications', notificationRoutes);
 router.use('/v1/health', healthRoutes);
+router.use('/v1/users', userRoutes);
 
 export default router;
