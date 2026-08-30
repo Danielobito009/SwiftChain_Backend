@@ -82,12 +82,13 @@ class AuthService {
     const JWT_SECRET = env.JWT_SECRET;
     try {
       const decoded = jwt.verify(token, JWT_SECRET) as {
+        userId?: string;
         sub?: string;
         id?: string;
         _id?: string;
       } | null;
       if (!decoded) throw new Error('Invalid token');
-      const userId = decoded.sub || decoded.id || decoded._id;
+      const userId = decoded.userId || decoded.sub || decoded.id || decoded._id;
       if (!userId) throw new Error('Token missing subject');
       return { userId };
     } catch (error) {

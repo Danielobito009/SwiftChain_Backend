@@ -53,12 +53,14 @@ export function initializeSocketServer(httpServer: HttpServer): TypedServer {
 
   // ─── Per-connection setup ──────────────────────────────────────────────────
   io.on('connection', (socket: TypedSocket) => {
-    // Optionally extract userId from auth handshake data
+    // Extract userId and JWT token from auth handshake data
     const userId = extractUserId(socket);
+    const token = extractToken(socket);
 
-    // Store userId on the socket data for easy access later
+    // Store metadata on the socket data for easy access later
     socket.data.connectedAt = Date.now();
     socket.data.userId = userId;
+    socket.data.token = token;
 
     // Register the connection in the service layer
     socketService.registerConnection(socket, userId);
@@ -160,10 +162,7 @@ export async function shutdownSocketServer(io: TypedServer): Promise<void> {
  * Extract an authenticated user ID from the socket handshake.
  *
  * Clients should pass their JWT in the `auth` object:
- *   `socket = io(url, { auth: { token: 'Bearer <jwt>' } })`
- *
- * This is intentionally lightweight — full JWT verification should be
- * done in a dedicated auth middleware if required.
+ *   `socket = io(url, { auth: { userId: "..." } })`
  *
  * @param socket - The connecting socket.
  * @returns        The userId string, or undefined if absent.
@@ -179,6 +178,31 @@ function extractUserId(socket: TypedSocket): string | undefined {
   const queryUserId = socket.handshake.query?.userId;
   if (typeof queryUserId === 'string' && queryUserId.trim()) {
     return queryUserId.trim();
+  }
+
+  return undefined;
+}
+
+/**
+ * Extract a JWT token from the socket handshake.
+ *
+ * Clients should pass their token in the `auth` object:
+ *   `socket = io(url, { auth: { token: 'Bearer <jwt>' } })`
+ *
+ * @param socket - The connecting socket.
+ * @returns        The raw token string, or undefined if absent.
+ */
+function extractToken(socket: TypedSocket): string | undefined {
+  const auth = socket.handshake.auth as Record<string, unknown>;
+
+  if (typeof auth?.token === 'string' && auth.token.trim()) {
+    return auth.token.trim();
+  }
+
+  // Fallback: check query params
+  const queryToken = socket.handshake.query?.token;
+  if (typeof queryToken === 'string' && queryToken.trim()) {
+    return queryToken.trim();
   }
 
   return undefined;
