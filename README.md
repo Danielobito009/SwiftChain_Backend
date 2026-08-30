@@ -128,6 +128,85 @@ The backend serves as the central hub connecting the frontend, database, and blo
 
 - `POST /uploads` - Upload proof of delivery or documents.
 
+### Audit Logs
+
+- `GET /audit-logs` - List administrative actions (admin only).
+- `GET /audit-logs/:targetType/:targetId` - Audit trail for a single record.
+
+---
+
+## 📖 API Documentation
+
+Interactive OpenAPI 3.0 documentation is served by the running application:
+
+- **Swagger UI:** `http://localhost:3000/api-docs`
+- **Raw specification:** `http://localhost:3000/api-docs.json`
+
+Use `POST /api/v1/auth/login` to obtain a token, then click **Authorize** in
+Swagger UI to attach it to subsequent requests.
+
+---
+
+## 📄 Pagination, Sorting & Filtering
+
+Collection endpoints share a common query interface and return a `meta` block
+alongside the data:
+
+| Parameter | Description | Example |
+| --------- | ----------- | ------- |
+| `page` | 1-based page number | `?page=2` |
+| `limit` | Items per page, clamped to the route maximum | `?limit=50` |
+| `sort` | Comma-separated fields, `-` prefix for descending | `?sort=-createdAt,name` |
+| `search` | Case-insensitive search across searchable fields | `?search=lagos` |
+
+Filters accept direct equality or the comparison operators `eq`, `ne`, `gt`,
+`gte`, `lt`, `lte`, `in` and `nin` in bracket notation:
+
+```bash
+GET /api/v1/deliveries?status=pending&amount[gte]=100&sort=-amount&page=1&limit=20
+```
+
+```json
+{
+  "status": "success",
+  "message": "Deliveries retrieved successfully",
+  "data": [],
+  "meta": {
+    "totalItems": 137,
+    "totalPages": 7,
+    "currentPage": 1,
+    "limit": 20,
+    "hasNextPage": true,
+    "hasPreviousPage": false,
+    "nextPage": 2,
+    "previousPage": null
+  }
+}
+```
+
+Only fields a route explicitly whitelists may be filtered or sorted on;
+anything else is ignored or rejected.
+
+---
+
+## 🛡 Rate Limiting
+
+Endpoints are protected against brute-force and abuse. Every response carries
+the standard `RateLimit-*` headers, and exceeding a limit returns `429` with a
+`Retry-After` header.
+
+| Scope | Default limit | Notes |
+| ----- | ------------- | ----- |
+| API-wide | 100 / 15 min | Baseline safety net. |
+| `POST /auth/login` | 5 / 15 min | Keyed by IP **and** targeted account. Successful logins are not counted. |
+| `POST /auth/register` | 10 / hour | Curbs automated signup abuse. |
+| Escrow endpoints | 30 / 15 min | Applies to the whole escrow router. |
+| Escrow refund / release | 10 / hour | Irreversible fund movement. |
+
+Every limit is configurable through the environment variables documented in
+`.env.example`. Behind a reverse proxy, set `TRUST_PROXY` to the number of
+hops so the real client IP is used rather than the proxy's.
+
 ---
 
 ## 🗺 Development Roadmap
@@ -256,6 +335,10 @@ Run the test suite using Jest:
 ```bash
 pnpm test
 ```
+
+Integration tests run against an in-memory MongoDB instance
+(`mongodb-memory-server`), so they exercise real Mongoose queries, indexes and
+validation rather than mocked data access. No local database is required.
 
 ---
 
