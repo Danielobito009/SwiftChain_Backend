@@ -12,6 +12,7 @@ import {
   InterServerEvents,
   SocketData,
 } from './socket.types';
+import { messageQueueService } from './messageQueue';
 
 /**
  * Interval (ms) between server-initiated ping events.
@@ -56,6 +57,18 @@ export class SocketService {
     };
 
     this.connections.set(socket.id, meta);
+
+    if (userId) {
+      const flushed = messageQueueService.flush(userId, (event, payload, ackCallback) => {
+        socket.emit(event, payload, ackCallback);
+      });
+
+      if (flushed > 0) {
+        logger.info(
+          `[Socket] Flushed ${flushed} queued message(s) for userId=${userId} on reconnect`,
+        );
+      }
+    }
 
     logger.info(
       `[Socket] Connected — id=${socket.id}${userId ? ` userId=${userId}` : ''} | ` +
@@ -256,6 +269,14 @@ export class SocketService {
    */
   public getConnectionCount(): number {
     return this.connections.size;
+  }
+
+  /**
+   * Clear the in-memory connection registry. Called after all sockets have
+   * been forcibly disconnected during graceful shutdown.
+   */
+  public clearConnections(): void {
+    this.connections.clear();
   }
 
   /**

@@ -45,6 +45,30 @@ export interface DisconnectPayload {
   connectedDurationMs: number;
 }
 
+/**
+ * Payload emitted on `auth_expired` when the server detects an expired
+ * or invalid JWT during an active socket session.
+ */
+export interface AuthExpiredPayload {
+  message: string;
+  gracePeriodMs: number;
+}
+
+/**
+ * Payload sent by the client on `auth_refresh` with a new JWT token.
+ */
+export interface AuthRefreshPayload {
+  token: string;
+}
+
+/**
+ * Acknowledgement emitted back on `auth_refresh_ack`.
+ */
+export interface AuthRefreshAckPayload {
+  success: boolean;
+  error?: string;
+}
+
 // ─── Offline sync types ───────────────────────────────────────────────────────
 
 /**
@@ -149,6 +173,10 @@ export interface LocationUpdateAck {
   locationId?: string;
   /** Error message when success === false. */
   error?: string;
+  /** True if the update was rejected as a duplicate. */
+  isDuplicate?: boolean;
+  /** True if the update was rejected as stale (older than last processed). */
+  isStale?: boolean;
 }
 
 /**
@@ -173,10 +201,14 @@ export interface ClientToServerEvents {
   pong: (payload: PongPayload) => void;
   join_room: (room: string) => void;
   leave_room: (room: string) => void;
+  /** Fired by a client to acknowledge a queued server-side message. */
+  message_ack: (messageId: string) => void;
   /** Fired by driver upon reconnection to flush offline-buffered updates. */
   location_sync: (payload: LocationSyncPayload) => void;
   /** Fired by driver to broadcast a live GPS fix to a delivery room. */
   driver_location_update: (payload: DriverLocationUpdatePayload) => void;
+  /** Fired by client to submit a refreshed JWT without reconnecting. */
+  auth_refresh: (payload: AuthRefreshPayload) => void;
 }
 
 /**
@@ -191,6 +223,7 @@ export interface InterServerEvents {
  */
 export interface SocketData {
   userId?: string;
+  token?: string;
   connectedAt: number;
   /** JWT expiration timestamp in ms */
   tokenExp?: number;

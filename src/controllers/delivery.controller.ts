@@ -6,7 +6,9 @@ import {
   CreateDeliveryInput,
   UpdateDeliveryInput,
   DeliveryFilter,
+  AssignDriverInput,
 } from '../services/delivery.service';
+import { sendSuccess } from '../utils/responseWrapper';
 
 interface AuthenticatedRequest extends Request {
   user?: { id: string };
@@ -27,10 +29,7 @@ export class DeliveryController {
       };
 
       const delivery = await deliveryService.create(input);
-      res.status(httpStatus.CREATED).json({
-        status: 'success',
-        data: delivery,
-      });
+      sendSuccess(res, delivery, 'Delivery created successfully', httpStatus.CREATED);
     } catch (error) {
       next(error);
     }
@@ -39,10 +38,7 @@ export class DeliveryController {
   async getById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const delivery = await deliveryService.getById(req.params.id);
-      res.status(httpStatus.OK).json({
-        status: 'success',
-        data: delivery,
-      });
+      sendSuccess(res, delivery, 'Delivery retrieved successfully', httpStatus.OK);
     } catch (error) {
       next(error);
     }
@@ -67,16 +63,20 @@ export class DeliveryController {
       };
 
       const result = await deliveryService.list(filters);
-      res.status(httpStatus.OK).json({
-        status: 'success',
-        data: result.data,
-        meta: {
-          total: result.total,
-          page: result.page,
-          limit: result.limit,
-          totalPages: result.totalPages,
+      sendSuccess(
+        res,
+        {
+          deliveries: result.data,
+          meta: {
+            total: result.total,
+            page: result.page,
+            limit: result.limit,
+            totalPages: result.totalPages,
+          },
         },
-      });
+        'Deliveries retrieved successfully',
+        httpStatus.OK,
+      );
     } catch (error) {
       next(error);
     }
@@ -94,10 +94,7 @@ export class DeliveryController {
       };
 
       const delivery = await deliveryService.update(req.params.id, input);
-      res.status(httpStatus.OK).json({
-        status: 'success',
-        data: delivery,
-      });
+      sendSuccess(res, delivery, 'Delivery updated successfully', httpStatus.OK);
     } catch (error) {
       next(error);
     }
@@ -107,11 +104,7 @@ export class DeliveryController {
     try {
       const userId = (req as AuthenticatedRequest).user?.id;
       const delivery = await deliveryService.archive(req.params.id, userId);
-      res.status(httpStatus.OK).json({
-        status: 'success',
-        data: delivery,
-        message: 'Delivery archived successfully',
-      });
+      sendSuccess(res, delivery, 'Delivery archived successfully', httpStatus.OK);
     } catch (error) {
       next(error);
     }
@@ -120,11 +113,7 @@ export class DeliveryController {
   async restore(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const delivery = await deliveryService.restore(req.params.id);
-      res.status(httpStatus.OK).json({
-        status: 'success',
-        data: delivery,
-        message: 'Delivery restored successfully',
-      });
+      sendSuccess(res, delivery, 'Delivery restored successfully', httpStatus.OK);
     } catch (error) {
       next(error);
     }
@@ -136,16 +125,51 @@ export class DeliveryController {
       const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 10;
 
       const result = await deliveryService.listArchived(page, limit);
-      res.status(httpStatus.OK).json({
-        status: 'success',
-        data: result.data,
-        meta: {
-          total: result.total,
-          page: result.page,
-          limit: result.limit,
-          totalPages: result.totalPages,
+      sendSuccess(
+        res,
+        {
+          deliveries: result.data,
+          meta: {
+            total: result.total,
+            page: result.page,
+            limit: result.limit,
+            totalPages: result.totalPages,
+          },
         },
-      });
+        'Archived deliveries retrieved successfully',
+        httpStatus.OK,
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /api/v1/deliveries/:id/assign-driver
+   *
+   * Assigns a driver to a delivery.  The request is rejected with a clear
+   * error if the delivery's Soroban escrow contract has not been successfully
+   * initialised (i.e. the escrow record is absent or its `lockStatus` is not
+   * `LOCKED`).
+   *
+   * Body: { driverId: string }
+   *
+   * Responses:
+   *   200 — driver assigned, returns updated delivery document.
+   *   400 — invalid delivery id or missing driverId.
+   *   404 — delivery not found.
+   *   409 — delivery already assigned / completed / cancelled, or escrow not LOCKED.
+   *   422 — escrow record does not exist (contract never initialised).
+   */
+  async assignDriver(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const input: AssignDriverInput = {
+        deliveryId: req.params.id,
+        driverId: req.body.driverId,
+      };
+
+      const delivery = await deliveryService.assignDriver(input);
+      sendSuccess(res, delivery, 'Driver assigned successfully.', httpStatus.OK);
     } catch (error) {
       next(error);
     }

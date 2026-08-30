@@ -4,6 +4,7 @@ import Escrow, { IEscrow, EscrowLockStatus } from '../models/Escrow';
 import Delivery, { DeliveryStatus } from '../models/Delivery';
 import { AppError } from '../utils/AppError';
 import logger from '../config/logger';
+import { withLock } from '../config/redis';
 
 /** Data extracted from an on-chain `escrow_funded` contract event. */
 export interface EscrowFundedInput {
@@ -14,6 +15,18 @@ export interface EscrowFundedInput {
   fundedBy?: string;
   transactionHash: string;
   ledger?: number;
+}
+
+/** Input data for releasing an escrow. */
+export interface ReleaseEscrowInput {
+  /** MongoDB ObjectId or contractId of the escrow to release. */
+  escrowId: string;
+  /** Transaction hash of the on-chain release operation. */
+  transactionHash: string;
+  /** Optional ledger sequence for audit trail. */
+  ledger?: number;
+  /** User or system identifier initiating the release. */
+  releasedBy?: string;
 }
 
 export class EscrowService {
@@ -105,6 +118,114 @@ export class EscrowService {
     }
 
     return escrow;
+  }
+
+  /**
+   * Release an escrow using distributed locking to prevent race conditions.
+   *
+   * This method acquires a Redis lock before processing the release to ensure
+   * that concurrent requests cannot release the same escrow twice. The lock is
+   * held for the duration of the transaction and automatically released afterward.
+   *
+   * @param input - Release escrow input data
+   * @returns The updated escrow document
+   * @throws AppError if the escrow is not found, not in LOCKED status, or lock acquisition fails
+   *
+   * @example
+   * const escrow = await escrowService.releaseEscrow({
+   *   escrowId: '507f1f77bcf86cd799439011',
+   *   transactionHash: '0xabc123...',
+   *   ledger: 12345,
+   *   releasedBy: 'user_id_or_system'
+   * });
+   */
+  async releaseEscrow(input: ReleaseEscrowInput): Promise<IEscrow> {
+    const { escrowId, transactionHash, ledger, releasedBy } = input;
+
+    // Validate escrowId format
+    if (!Types.ObjectId.isValid(escrowId) && !escrowId.startsWith('C')) {
+      throw new AppError('Invalid escrowId format', httpStatus.BAD_REQUEST);
+    }
+
+    // Define the lock resource key
+    const lockResource = `escrow:release:${escrowId}`;
+
+    logger.info(
+      `[EscrowService] Attempting to release escrow — id=${escrowId} tx=${transactionHash}`,
+    );
+
+    // Execute release within a distributed lock
+    return await withLock(lockResource, async () => {
+      logger.debug(`[EscrowService] Lock acquired for escrow release — id=${escrowId}`);
+
+      // Fetch the escrow (by ObjectId or contractId)
+      let escrow: IEscrow | null = null;
+
+      if (Types.ObjectId.isValid(escrowId)) {
+        escrow = await Escrow.findById(escrowId);
+      } else {
+        escrow = await Escrow.findOne({ contractId: escrowId });
+      }
+
+      if (!escrow) {
+        throw new AppError('Escrow not found', httpStatus.NOT_FOUND);
+      }
+
+      // Check if the escrow is already released
+      if (escrow.lockStatus === EscrowLockStatus.RELEASED) {
+        logger.warn(
+          `[EscrowService] Escrow already released — id=${escrowId} status=${escrow.lockStatus}`,
+        );
+        throw new AppError('Escrow has already been released', httpStatus.CONFLICT);
+      }
+
+      // Check if the escrow is in a valid state to be released
+      if (escrow.lockStatus !== EscrowLockStatus.LOCKED) {
+        throw new AppError(
+          `Escrow cannot be released from status: ${escrow.lockStatus}`,
+          httpStatus.CONFLICT,
+        );
+      }
+
+      // Check if this transaction has already been recorded (idempotency)
+      if (escrow.transactions.some((tx) => tx.hash === transactionHash)) {
+        logger.info(
+          `[EscrowService] Skipping already-processed release tx=${transactionHash} for escrow=${escrowId}`,
+        );
+        return escrow;
+      }
+
+      // Record the release transaction
+      const releaseTransaction = {
+        hash: transactionHash,
+        type: 'release' as const,
+        ledger,
+        recordedAt: new Date(),
+      };
+
+      escrow.lockStatus = EscrowLockStatus.RELEASED;
+      escrow.releasedAt = new Date();
+      escrow.transactions.push(releaseTransaction);
+
+      await escrow.save();
+
+      // Update related delivery status to COMPLETED
+      const delivery = await Delivery.findById(escrow.delivery);
+      if (delivery && delivery.status !== DeliveryStatus.COMPLETED) {
+        delivery.status = DeliveryStatus.COMPLETED;
+        await delivery.save();
+        logger.debug(
+          `[EscrowService] Delivery status updated to COMPLETED — delivery=${String(escrow.delivery)}`,
+        );
+      }
+
+      logger.info(
+        `[EscrowService] Escrow released successfully — id=${escrowId} ` +
+          `contract=${escrow.contractId} tx=${transactionHash} releasedBy=${releasedBy ?? 'system'}`,
+      );
+
+      return escrow;
+    });
   }
 }
 

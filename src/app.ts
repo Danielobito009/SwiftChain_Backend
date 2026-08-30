@@ -1,6 +1,5 @@
 import path from 'path';
 import express from 'express';
-import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
@@ -10,9 +9,11 @@ import swaggerUi from 'swagger-ui-express';
 
 import routes from './routes';
 import logger from './config/logger';
+import { sendError } from './utils/responseWrapper';
 import { connectDatabase } from './config/database';
 import errorHandler from './middleware/errorHandler';
 import requestLogger from './middleware/requestLogger';
+import { requestTracker } from './middleware/requestTracker';
 import env from './config/env';
 import swaggerSpec from './docs/swagger';
 
@@ -26,6 +27,8 @@ app.set('trust proxy', 1);
 
 app.use(helmet());
 app.use(compression());
+// Track in-flight requests and reject new ones during graceful shutdown.
+app.use(requestTracker);
 app.use(requestLogger);
 
 // Swagger UI needs inline <script>/<style>, which the default Helmet CSP
@@ -74,21 +77,8 @@ app.use('/uploads', express.static(path.join(process.cwd(), env.UPLOAD_LOCAL_DIR
 
 app.use('/api', routes);
 
-app.get('/health', (req, res): void => {
-  res.status(200).json({
-    status: 'success',
-    message: 'SwiftChain-Backend is running',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-  });
-});
-
 app.use((req, res): void => {
-  res.status(404).json({
-    success: false,
-    error: `Route ${req.path} not found`,
-  });
+  sendError(res, `Route ${req.path} not found`, 404);
 });
 
 // Connect to MongoDB but don't start the server here
