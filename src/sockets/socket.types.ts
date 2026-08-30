@@ -16,6 +16,8 @@ export interface SocketConnectionMeta {
   missedPongs: number;
   /** Rooms the socket is currently a member of */
   rooms: string[];
+  /** Optional JWT expiration timestamp (ms since epoch) */
+  tokenExp?: number;
 }
 
 /**
@@ -188,10 +190,8 @@ export interface ServerToClientEvents {
   'location:update': (payload: LocationBroadcastPayload) => void;
   /** Ack sent back to the driver after a live location update is processed. */
   location_update_ack: (payload: LocationUpdateAck) => void;
-  /** Emitted when the server detects an expired or invalid JWT during an active session. */
-  auth_expired: (payload: AuthExpiredPayload) => void;
-  /** Ack sent back after the client submits a refreshed JWT via `auth_refresh`. */
-  auth_refresh_ack: (payload: AuthRefreshAckPayload) => void;
+  /** Notify client that authentication token has expired */
+  auth_expired: () => void;
 }
 
 /**
@@ -225,6 +225,8 @@ export interface SocketData {
   userId?: string;
   token?: string;
   connectedAt: number;
+  /** JWT expiration timestamp in ms */
+  tokenExp?: number;
 }
 
 /**

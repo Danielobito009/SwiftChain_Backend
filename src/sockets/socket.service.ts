@@ -45,8 +45,9 @@ export class SocketService {
    * @param socket - The incoming socket instance.
    * @param userId - Optional authenticated user ID extracted from auth token.
    */
-  public registerConnection(socket: TypedSocket, userId?: string): void {
+  public registerConnection(socket: TypedSocket, userId?: string, tokenExp?: number): void {
     const meta: SocketConnectionMeta = {
+      tokenExp: tokenExp,
       socketId: socket.id,
       userId,
       connectedAt: Date.now(),
@@ -230,11 +231,21 @@ export class SocketService {
         staleConnectionsEvicted += 1;
       } else {
         // Send ping and wait for pong response
-        const pingPayload: PingPayload = { timestamp: Date.now() };
-        const socket = io.sockets.sockets.get(socketId);
-        if (socket) {
+      // Send ping and wait for pong response
+      const pingPayload: PingPayload = { timestamp: Date.now() };
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket) {
+        // Check JWT expiration before sending ping
+        const exp = (socket.data as any).tokenExp as number | undefined;
+        if (exp && exp < Date.now()) {
+          // Token has expired – notify client and disconnect
+          logger.warn(`[Socket] JWT expired for socket id=${socketId}`);
+          socket.emit('auth_expired');
+          socket.disconnect(true);
+        } else {
           socket.emit('ping', pingPayload);
         }
+      }
       }
     }
 
