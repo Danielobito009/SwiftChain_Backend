@@ -36,6 +36,25 @@ interface EnvConfig {
   SOROBAN_RPC_RETRY_MAX_MS: number;
   /** Maximum attempts to retry a transaction that fails with tx_bad_seq. Default: 3 */
   STELLAR_BAD_SEQ_MAX_RETRIES: number;
+
+  // ── Push notifications (Firebase Cloud Messaging) ───────────────────────────
+  /**
+   * Firebase project id. Push sending is disabled when this (or either
+   * credential below) is blank, so local development runs without Firebase.
+   */
+  FCM_PROJECT_ID: string;
+  /** Service-account client email used to mint OAuth2 access tokens. */
+  FCM_CLIENT_EMAIL: string;
+  /** Service-account private key (PEM; literal `\n` sequences are normalised). */
+  FCM_PRIVATE_KEY: string;
+  /** Timeout (ms) for FCM and Google token endpoint requests. Default: 10000 */
+  FCM_REQUEST_TIMEOUT_MS: number;
+
+  // ── Bulk delivery CSV import ────────────────────────────────────────────────
+  /** Maximum accepted upload size (bytes) for the bulk CSV endpoint. Default: 5MB */
+  BULK_UPLOAD_MAX_BYTES: number;
+  /** Maximum data rows accepted in a single bulk upload. Default: 1000 */
+  BULK_UPLOAD_MAX_ROWS: number;
 }
 
 const envSchema = z.object({
@@ -67,6 +86,16 @@ const envSchema = z.object({
   SOROBAN_RPC_RETRY_BASE_MS: z.coerce.number().int().min(50).default(250),
   SOROBAN_RPC_RETRY_MAX_MS: z.coerce.number().int().min(500).default(8000),
   STELLAR_BAD_SEQ_MAX_RETRIES: z.coerce.number().int().min(1).max(10).default(3),
+
+  // ── Push notifications (Firebase Cloud Messaging) ───────────────────────────
+  FCM_PROJECT_ID: z.string().default(''),
+  FCM_CLIENT_EMAIL: z.string().default(''),
+  FCM_PRIVATE_KEY: z.string().default(''),
+  FCM_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).default(10000),
+
+  // ── Bulk delivery CSV import ────────────────────────────────────────────────
+  BULK_UPLOAD_MAX_BYTES: z.coerce.number().int().min(1024).default(5 * 1024 * 1024),
+  BULK_UPLOAD_MAX_ROWS: z.coerce.number().int().min(1).max(10000).default(1000),
 });
 
 let env: EnvConfig;
