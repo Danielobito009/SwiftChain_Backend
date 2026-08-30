@@ -40,11 +40,7 @@ router.get('/preferences', getPreferences);
  * @desc    Enable/disable push and choose which events to receive
  * @access  Private
  */
-router.patch(
-  '/preferences',
-  validateRequest({ body: updatePreferencesSchema }),
-  updatePreferences,
-);
+router.patch('/preferences', validateRequest({ body: updatePreferencesSchema }), updatePreferences);
 
 /**
  * @route   POST /api/v1/notifications/devices

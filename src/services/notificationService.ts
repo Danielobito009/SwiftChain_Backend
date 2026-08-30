@@ -182,8 +182,7 @@ export class NotificationService {
         logger.info(`[NotificationService] Pruned ${pruned} invalid device token(s)`);
       }
 
-      const status =
-        result.acceptedCount > 0 ? NotificationStatus.SENT : NotificationStatus.FAILED;
+      const status = result.acceptedCount > 0 ? NotificationStatus.SENT : NotificationStatus.FAILED;
 
       return this.record(input, status, result);
     } catch (error) {

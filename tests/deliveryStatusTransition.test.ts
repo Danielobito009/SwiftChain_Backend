@@ -12,9 +12,7 @@ import mongoose, { Types } from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import Delivery, { DeliveryStatus, IDelivery } from '../src/models/Delivery';
 import Notification, { NotificationStatus } from '../src/models/Notification';
-import NotificationPreference, {
-  NotificationEvent,
-} from '../src/models/NotificationPreference';
+import NotificationPreference, { NotificationEvent } from '../src/models/NotificationPreference';
 import { DeliveryService } from '../src/services/delivery.service';
 import { notificationService } from '../src/services/notificationService';
 
@@ -60,9 +58,7 @@ describe('DeliveryService.updateStatus', () => {
   beforeEach(() => {
     // The transport itself is covered in notificationService.test.ts; here we
     // only care that the transition fires it with the right arguments.
-    notifySpy = jest
-      .spyOn(notificationService, 'notifyDeliveryTransition')
-      .mockResolvedValue([]);
+    notifySpy = jest.spyOn(notificationService, 'notifyDeliveryTransition').mockResolvedValue([]);
   });
 
   afterEach(async () => {

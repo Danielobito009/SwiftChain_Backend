@@ -65,7 +65,9 @@ const NotificationPreferenceSchema = new Schema<INotificationPreference>(
       type: [String],
       enum: Object.values(NotificationEvent),
       // New users are opted into every event; they can narrow this afterwards.
-      default: () => Object.values(NotificationEvent),
+      // A factory (not a shared array literal) so each document gets its own
+      // copy and one user's edit cannot mutate another's defaults.
+      default: (): NotificationEvent[] => Object.values(NotificationEvent),
     },
     devices: { type: [DeviceTokenSchema], default: [] },
   },

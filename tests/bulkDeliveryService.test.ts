@@ -180,6 +180,32 @@ describe('BulkDeliveryService', () => {
       expect(result.errors.length).toBeGreaterThanOrEqual(2);
     });
 
+    it('counts failed rows rather than individual errors', async () => {
+      // One row, three invalid columns: the caller must be told one row
+      // failed, not three, or "N of M" would exceed the rows in the file.
+      const result = await service.importFromCsv(
+        csv(row({ customerName: '', customerPhone: '', packageWeight: 'x' })),
+        userId,
+      );
+
+      expect(result.totalRows).toBe(1);
+      expect(result.failureCount).toBe(1);
+      expect(result.errors.length).toBeGreaterThan(1);
+      expect(result.successCount + result.failureCount).toBeLessThanOrEqual(result.totalRows);
+    });
+
+    it('keeps success and failure counts consistent with the row total', async () => {
+      const result = await service.importFromCsv(
+        csv(row(), row({ customerName: '', packageWeight: 'x' }), row()),
+        userId,
+      );
+
+      expect(result.totalRows).toBe(3);
+      expect(result.successCount).toBe(2);
+      expect(result.failureCount).toBe(1);
+      expect(result.successCount + result.failureCount).toBe(result.totalRows);
+    });
+
     it('rejects a non-positive package weight', async () => {
       const result = await service.importFromCsv(csv(row({ packageWeight: '0' })), userId);
 

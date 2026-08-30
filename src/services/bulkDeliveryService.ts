@@ -73,7 +73,12 @@ export interface BulkImportResult {
   totalRows: number;
   /** Rows written to the database. */
   successCount: number;
-  /** Rows rejected, either by validation or by the database. */
+  /**
+   * Distinct rows rejected, by validation or by the database.
+   *
+   * Counts rows, not errors: one row can appear several times in `errors`
+   * when more than one of its columns is invalid.
+   */
   failureCount: number;
   /** Tracking numbers of the created deliveries. */
   created: string[];
@@ -134,15 +139,21 @@ export class BulkDeliveryService {
 
     const created = await this.insert(insertable, createdBy, errors);
 
+    // A single row can raise several errors (one per invalid column), so the
+    // failure count is the number of distinct rejected lines — not the length
+    // of the error list. Otherwise a one-row file with three bad fields would
+    // report "3 of 1 rows failed".
+    const failedLines = new Set(errors.map((error) => error.line));
+
     logger.info(
       `[BulkDeliveryService] Import finished — user=${createdBy} ` +
-        `rows=${parsed.rows.length} created=${created.length} failed=${errors.length}`,
+        `rows=${parsed.rows.length} created=${created.length} failed=${failedLines.size}`,
     );
 
     return {
       totalRows: parsed.rows.length,
       successCount: created.length,
-      failureCount: errors.length,
+      failureCount: failedLines.size,
       created: created.map((delivery) => delivery.trackingNumber ?? String(delivery._id)),
       // Line order makes the report easy to reconcile against the source file.
       errors: errors.sort((a, b) => a.line - b.line),
@@ -336,7 +347,11 @@ export class BulkDeliveryService {
   /** Pull per-document write errors out of a partial bulk-write failure. */
   private extractWriteErrors(error: unknown): Array<{ index: number; message: string }> {
     const candidate = error as {
-      writeErrors?: Array<{ index?: number; err?: { index?: number; errmsg?: string }; errmsg?: string }>;
+      writeErrors?: Array<{
+        index?: number;
+        err?: { index?: number; errmsg?: string };
+        errmsg?: string;
+      }>;
     };
 
     if (!Array.isArray(candidate?.writeErrors)) return [];

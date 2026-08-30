@@ -136,7 +136,11 @@ function normaliseHeader(header: string): string {
  *                         headers, or exceeds `maxRows`.
  */
 export function parseCsv(input: string, maxRows: number): CsvParseResult {
-  const text = input.replace(/^﻿/, '');
+  // Spreadsheet exports commonly prefix the file with a UTF-8 BOM, which
+  // would otherwise become part of the first header name. Written as an
+  // escape rather than a literal so the source stays free of invisible
+  // characters.
+  const text = input.replace(/^\uFEFF/, '');
 
   if (text.trim() === '') {
     throw new CsvParseError('CSV file is empty');

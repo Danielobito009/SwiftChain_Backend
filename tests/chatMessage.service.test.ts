@@ -149,9 +149,7 @@ describe('ChatMessageService', () => {
     });
 
     it('writes nothing when validation fails', async () => {
-      await expect(service.createMessage({ content: '' })).rejects.toThrow(
-        InvalidChatMessageError,
-      );
+      await expect(service.createMessage({ content: '' })).rejects.toThrow(InvalidChatMessageError);
       await expect(ChatMessage.countDocuments({})).resolves.toBe(0);
     });
   });
@@ -166,11 +164,7 @@ describe('ChatMessageService', () => {
 
       const transcript = await service.getRecentTranscript();
 
-      expect(transcript.map((message) => message.content)).toEqual([
-        'first',
-        'second',
-        'third',
-      ]);
+      expect(transcript.map((message) => message.content)).toEqual(['first', 'second', 'third']);
     });
 
     it('returns the most recent messages when over the limit', async () => {
@@ -183,9 +177,7 @@ describe('ChatMessageService', () => {
       expect(transcript).toHaveLength(RECENT_MESSAGE_LIMIT);
       // The oldest five are dropped, so the window starts at message-5.
       expect(transcript[0].content).toBe('message-5');
-      expect(transcript[transcript.length - 1].content).toBe(
-        `message-${RECENT_MESSAGE_LIMIT + 4}`,
-      );
+      expect(transcript[transcript.length - 1].content).toBe(`message-${RECENT_MESSAGE_LIMIT + 4}`);
     });
 
     it('honours an explicit limit', async () => {

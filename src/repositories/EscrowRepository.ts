@@ -86,11 +86,7 @@ export class EscrowRepository extends BaseRepository<IEscrow> {
     const set: Record<string, unknown> = { lockStatus: to };
     if (timestampField) set[timestampField] = new Date();
 
-    return this.updateOne(
-      { _id: id, lockStatus: { $in: expectedFrom } },
-      { $set: set },
-      options,
-    );
+    return this.updateOne({ _id: id, lockStatus: { $in: expectedFrom } }, { $set: set }, options);
   }
 }
 

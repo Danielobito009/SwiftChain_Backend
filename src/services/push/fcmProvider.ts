@@ -17,11 +17,7 @@ const TOKEN_REFRESH_SKEW_SECONDS = 60;
  * Anything else (quota, transient server errors) leaves the token in place so
  * a later send can retry it.
  */
-const PERMANENT_TOKEN_ERRORS = new Set([
-  'UNREGISTERED',
-  'INVALID_ARGUMENT',
-  'SENDER_ID_MISMATCH',
-]);
+const PERMANENT_TOKEN_ERRORS = new Set(['UNREGISTERED', 'INVALID_ARGUMENT', 'SENDER_ID_MISMATCH']);
 
 interface CachedAccessToken {
   token: string;
@@ -159,12 +155,14 @@ export class FcmProvider implements IPushProvider {
   private extractErrorCode(error: unknown): string | undefined {
     if (!axios.isAxiosError(error)) return undefined;
 
-    const data = (error as AxiosError<{
-      error?: {
-        status?: string;
-        details?: Array<{ errorCode?: string }>;
-      };
-    }>).response?.data;
+    const data = (
+      error as AxiosError<{
+        error?: {
+          status?: string;
+          details?: Array<{ errorCode?: string }>;
+        };
+      }>
+    ).response?.data;
 
     const detailCode = data?.error?.details?.find((detail) => detail.errorCode)?.errorCode;
     return detailCode ?? data?.error?.status;

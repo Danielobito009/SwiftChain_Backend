@@ -1,12 +1,4 @@
-import {
-  Document,
-  FilterQuery,
-  Model,
-  Query,
-  QueryOptions,
-  Types,
-  UpdateQuery,
-} from 'mongoose';
+import { Document, FilterQuery, Model, Query, QueryOptions, Types, UpdateQuery } from 'mongoose';
 import { IRepository, Page, ReadOptions, WriteOptions } from './types';
 
 /**
@@ -176,9 +168,7 @@ export abstract class BaseRepository<T extends Document> implements IRepository<
 
   async deleteById(id: string, options?: WriteOptions): Promise<boolean> {
     if (!this.isValidId(id)) return false;
-    const result = await this.model
-      .findByIdAndDelete(id, { session: options?.session })
-      .exec();
+    const result = await this.model.findByIdAndDelete(id, { session: options?.session }).exec();
     return result !== null;
   }
 }

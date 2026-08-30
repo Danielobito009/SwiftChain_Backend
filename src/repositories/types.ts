@@ -71,10 +71,19 @@ export interface IRepository<T> {
   findById(id: string, options?: ReadOptions<T>): Promise<T | null>;
   findOne(filter: FilterQuery<T>, options?: ReadOptions<T>): Promise<T | null>;
   find(filter: FilterQuery<T>, options?: ReadOptions<T>): Promise<T[]>;
-  paginate(filter: FilterQuery<T>, page: number, limit: number, options?: ReadOptions<T>): Promise<Page<T>>;
+  paginate(
+    filter: FilterQuery<T>,
+    page: number,
+    limit: number,
+    options?: ReadOptions<T>,
+  ): Promise<Page<T>>;
   count(filter: FilterQuery<T>, options?: ReadOptions<T>): Promise<number>;
   exists(filter: FilterQuery<T>, options?: ReadOptions<T>): Promise<boolean>;
   updateById(id: string, update: UpdateQuery<T>, options?: WriteOptions): Promise<T | null>;
-  updateOne(filter: FilterQuery<T>, update: UpdateQuery<T>, options?: WriteOptions): Promise<T | null>;
+  updateOne(
+    filter: FilterQuery<T>,
+    update: UpdateQuery<T>,
+    options?: WriteOptions,
+  ): Promise<T | null>;
   deleteById(id: string, options?: WriteOptions): Promise<boolean>;
 }

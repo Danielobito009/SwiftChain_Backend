@@ -60,11 +60,7 @@ describe('Repository layer', () => {
   }, 30_000);
 
   afterEach(async () => {
-    await Promise.all([
-      Delivery.deleteMany({}),
-      User.deleteMany({}),
-      Escrow.deleteMany({}),
-    ]);
+    await Promise.all([Delivery.deleteMany({}), User.deleteMany({}), Escrow.deleteMany({})]);
   });
 
   // ── BaseRepository behaviour, exercised through DeliveryRepository ─────────
@@ -260,9 +256,7 @@ describe('Repository layer', () => {
       });
 
       it('accepts a list of permitted source states', async () => {
-        const created = await repository.create(
-          deliveryPayload({ status: DeliveryStatus.FUNDED }),
-        );
+        const created = await repository.create(deliveryPayload({ status: DeliveryStatus.FUNDED }));
 
         const updated = await repository.transitionStatus(
           String(created._id),

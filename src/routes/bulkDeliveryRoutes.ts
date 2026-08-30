@@ -37,10 +37,7 @@ const handleUploadErrors = (
     if (error.code === 'LIMIT_FILE_SIZE') {
       const limitMb = (env.BULK_UPLOAD_MAX_BYTES / (1024 * 1024)).toFixed(1);
       next(
-        new AppError(
-          `Uploaded file exceeds the ${limitMb}MB limit.`,
-          StatusCodes.REQUEST_TOO_LONG,
-        ),
+        new AppError(`Uploaded file exceeds the ${limitMb}MB limit.`, StatusCodes.REQUEST_TOO_LONG),
       );
       return;
     }
@@ -73,12 +70,6 @@ const handleUploadErrors = (
  * deliveryFee, escrowAmount.
  * Optional columns: customerEmail, notes.
  */
-router.post(
-  '/bulk',
-  authenticate,
-  upload.single('file'),
-  handleUploadErrors,
-  bulkCreateDeliveries,
-);
+router.post('/bulk', authenticate, upload.single('file'), handleUploadErrors, bulkCreateDeliveries);
 
 export default router;

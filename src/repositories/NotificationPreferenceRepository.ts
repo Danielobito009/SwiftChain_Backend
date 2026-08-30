@@ -34,9 +34,7 @@ export class NotificationPreferenceRepository extends BaseRepository<INotificati
    * cannot race into a duplicate-key error — the second one matches the
    * document the first inserted.
    */
-  async findOrCreateByUserId(
-    userId: string | Types.ObjectId,
-  ): Promise<INotificationPreference> {
+  async findOrCreateByUserId(userId: string | Types.ObjectId): Promise<INotificationPreference> {
     const preference = await this.model
       .findOneAndUpdate(
         { user: userId },

@@ -160,10 +160,7 @@ export const unregisterDevice = async (
 ): Promise<void> => {
   try {
     const body = req.body as z.infer<typeof unregisterDeviceSchema>;
-    const preference = await notificationService.unregisterDevice(
-      requireUserId(req),
-      body.token,
-    );
+    const preference = await notificationService.unregisterDevice(requireUserId(req), body.token);
 
     res.status(StatusCodes.OK).json({
       status: 'success',

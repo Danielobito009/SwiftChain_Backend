@@ -10,9 +10,7 @@
 import mongoose, { Types } from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import Delivery, { DeliveryStatus, IDelivery } from '../src/models/Delivery';
-import NotificationPreference, {
-  NotificationEvent,
-} from '../src/models/NotificationPreference';
+import NotificationPreference, { NotificationEvent } from '../src/models/NotificationPreference';
 import Notification, { NotificationStatus } from '../src/models/Notification';
 import { NotificationService } from '../src/services/notificationService';
 import { IPushProvider, PushMessage, PushResult } from '../src/services/push/pushProvider';
