@@ -9,6 +9,8 @@
     "lint": "eslint . --ext .ts",
     "format": "prettier --write .",
     "test": "jest",
+    "test:coverage": "jest --coverage",
+    "test:mutation": "stryker run",
     "prepare": "husky install"
   },
   "dependencies": {
@@ -43,6 +45,8 @@
   },
   "devDependencies": {
     "@jest/globals": "^30.4.1",
+    "@stryker-mutator/core": "^7.3.1",
+    "@stryker-mutator/typescript-checker": "^7.3.1",
     "@types/axios": "^0.14.0",
     "@types/bcryptjs": "2.4.6",
     "@types/compression": "1.7.5",

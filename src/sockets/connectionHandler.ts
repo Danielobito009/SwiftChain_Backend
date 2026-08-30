@@ -5,6 +5,7 @@ import { socketService } from './socket.service';
 import { registerSyncHandler } from './syncHandler';
 import { registerLocationHandler } from './locationHandler';
 import { messageQueueService } from './messageQueue';
+import socketMetricsService from '../services/socketMetricsService';
 import {
   PongPayload,
   ServerToClientEvents,
@@ -54,6 +55,9 @@ export function initializeSocketServer(httpServer: HttpServer): TypedServer {
 
   // ─── Per-connection setup ──────────────────────────────────────────────────
   io.on('connection', (socket: TypedSocket) => {
+    // Record connection in metrics
+    socketMetricsService.recordConnection();
+
     // Extract authentication info from handshake
     const { userId, tokenExp } = extractAuthInfo(socket);
 
@@ -132,6 +136,9 @@ export function initializeSocketServer(httpServer: HttpServer): TypedServer {
 
     // ── disconnect handler ───────────────────────────────────────────────────
     socket.on('disconnect', (reason: string) => {
+      // Record disconnection in metrics
+      socketMetricsService.recordDisconnection();
+
       socketService.handleDisconnect(socket, reason);
     });
 
