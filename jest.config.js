@@ -2,10 +2,14 @@
 module.exports = {
   testEnvironment: 'node',
   transform: {
-    // Disable ts-jest type-checking diagnostics so pre-existing type errors in
-    // unrelated source files do not block the test runner.
-    // Type safety is still enforced separately by `pnpm run build` (tsc).
-    '^.+\\.tsx?$': ['ts-jest', { diagnostics: false }],
+    ...tsJestTransformCfg,
+    '^.+\\.tsx?$': [
+      'ts-jest',
+      {
+        ...tsJestTransformCfg['^.+\\.tsx?$'][1],
+        isolatedModules: true,
+      },
+    ],
   },
   setupFiles: ['<rootDir>/tests/jest.setup.ts'],
   // Allow enough time for MongoMemoryServer to start (and download the binary
