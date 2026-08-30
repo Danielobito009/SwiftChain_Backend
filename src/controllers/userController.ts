@@ -4,6 +4,7 @@ import User from '../models/User';
 import { userService } from '../services/userService';
 import AppError from '../utils/AppError';
 import asyncHandler from '../utils/asyncHandler';
+import { sendSuccess } from '../utils/responseWrapper';
 import type { AuthenticatedRequest } from '../middlewares/authMiddleware';
 import { UserRole, UserStatus } from '../interfaces/IUser';
 
@@ -42,11 +43,12 @@ class UserController {
         throw new AppError('User not found.', StatusCodes.NOT_FOUND);
       }
 
-      res.status(StatusCodes.OK).json({
-        status: 'success',
-        message: 'Wallet address updated successfully',
-        data: { user: updatedUser },
-      });
+      sendSuccess(
+        res,
+        { user: updatedUser },
+        'Wallet address updated successfully',
+        StatusCodes.OK,
+      );
     },
   );
 

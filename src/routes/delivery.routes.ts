@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { deliveryController } from '../controllers/delivery.controller';
 import { validateRequest } from '../middlewares/validateRequest';
+import { requireIdempotencyKey } from '../middlewares/idempotency';
 import {
   createDeliverySchema,
   updateDeliverySchema,
