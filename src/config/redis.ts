@@ -18,6 +18,13 @@ export const redisClient = new Redis(env.REDIS_URL, {
 });
 
 /**
+ * Helper to safely get the active Redis client.
+ */
+export function getRedisClient(): Redis | null {
+  return redisClient;
+}
+
+/**
  * Redlock instance for distributed lock management across multiple Redis nodes.
  * Currently configured with a single Redis instance, but can be extended to
  * support multiple Redis clusters for higher availability.

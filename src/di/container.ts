@@ -45,6 +45,7 @@ import { fleetService } from '../services/fleetService';
 import escrowService from '../services/escrowService';
 import { disputeService } from '../services/disputeService';
 import adminService from '../services/adminService';
+import dashboardService from '../services/dashboardService';
 import eventLogService from '../services/eventLogService';
 import profilePictureService from '../services/profilePicture.service';
 import storageService from '../services/storage.service';
@@ -72,6 +73,7 @@ import { escrowController } from '../controllers/escrow.controller';
 import escrowControllerInstance from '../controllers/escrowController';
 import { disputeController } from '../controllers/disputeController';
 import { adminController } from '../controllers/adminController';
+import dashboardController from '../controllers/dashboardController';
 import { eventLogController } from '../controllers/eventLogController';
 import { profileController } from '../controllers/profileController';
 import { uploadController } from '../controllers/uploadController';
@@ -81,7 +83,6 @@ import circuitBreakerController from '../controllers/circuitBreakerController';
 import indexerController from '../controllers/indexerController';
 import { indexerController as indexerController2 } from '../controllers/indexer.controller';
 import monitorController from '../controllers/monitorController';
-import stellarController from '../controllers/stellarController';
 import { stellarController as stellarController2 } from '../controllers/stellar.controller';
 
 import { TOKENS } from './tokens';
@@ -133,6 +134,7 @@ export function createDIContainer(): AwilixContainer {
     [TOKENS.escrow_service]: asValue(escrowService), // Alternate name
     [TOKENS.disputeService]: asValue(disputeService),
     [TOKENS.adminService]: asValue(adminService),
+    [TOKENS.dashboardService]: asValue(dashboardService),
     [TOKENS.eventLogService]: asValue(eventLogService),
     [TOKENS.profilePictureService]: asValue(profilePictureService),
     [TOKENS.storageService]: asValue(storageService),
@@ -166,6 +168,7 @@ export function createDIContainer(): AwilixContainer {
     [TOKENS.escrow_controller]: asValue(escrowController),
     [TOKENS.disputeController]: asValue(disputeController),
     [TOKENS.adminController]: asValue(adminController),
+    [TOKENS.dashboardController]: asValue(dashboardController),
     [TOKENS.eventLogController]: asValue(eventLogController),
     [TOKENS.profileController]: asValue(profileController),
     [TOKENS.uploadController]: asValue(uploadController),
@@ -175,7 +178,7 @@ export function createDIContainer(): AwilixContainer {
     [TOKENS.indexerController]: asValue(indexerController),
     [TOKENS.indexer_controller]: asValue(indexerController2),
     [TOKENS.monitorController]: asValue(monitorController),
-    [TOKENS.stellarController]: asValue(stellarController),
+    [TOKENS.stellarController]: asValue(stellarController2),
     [TOKENS.stellar_controller]: asValue(stellarController2),
   });
 

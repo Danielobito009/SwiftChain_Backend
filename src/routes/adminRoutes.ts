@@ -2,6 +2,7 @@ import { Router } from 'express';
 import authenticate from '../middleware/authenticate';
 import requireRole from '../middleware/requireRole';
 import { suspendUser, getDisputes } from '../controllers/adminController';
+import { getDashboardMetrics } from '../controllers/dashboardController';
 import { UserRole } from '../interfaces/IUser';
 
 const router = Router();
@@ -9,6 +10,85 @@ const router = Router();
 // All admin routes require a valid JWT AND the admin role
 router.use(authenticate);
 router.use(requireRole(UserRole.ADMIN));
+
+/**
+ * @openapi
+ * /v1/admin/dashboard:
+ *   get:
+ *     tags: [Admin]
+ *     summary: Retrieve real-time admin dashboard system metrics
+ *     description: >
+ *       Admin-only. Aggregates active deliveries, online drivers, total escrow volume,
+ *       and Soroban RPC status. Results are cached in Redis to minimize database load.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: refresh
+ *         schema:
+ *           type: boolean
+ *         description: Set to true to bypass cache and force fresh aggregation
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved system metrics
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Admin dashboard metrics retrieved successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     activeDeliveries:
+ *                       type: object
+ *                       properties:
+ *                         total:
+ *                           type: integer
+ *                         byStatus:
+ *                           type: object
+ *                     onlineDrivers:
+ *                       type: object
+ *                       properties:
+ *                         totalActiveDrivers:
+ *                           type: integer
+ *                         recentlyActiveDrivers:
+ *                           type: integer
+ *                     escrow:
+ *                       type: object
+ *                       properties:
+ *                         totalVolume:
+ *                           type: number
+ *                         lockedVolume:
+ *                           type: number
+ *                         releasedVolume:
+ *                           type: number
+ *                         refundedVolume:
+ *                           type: number
+ *                         activeCount:
+ *                           type: integer
+ *                         totalCount:
+ *                           type: integer
+ *                     metadata:
+ *                       type: object
+ *                       properties:
+ *                         timestamp:
+ *                           type: string
+ *                         cached:
+ *                           type: boolean
+ *                         cacheTtlSeconds:
+ *                           type: integer
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         description: Requester is not an admin
+ */
+router.get('/dashboard', getDashboardMetrics);
 
 /**
  * @openapi
