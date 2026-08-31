@@ -1,5 +1,6 @@
 import mongoose, { Schema } from 'mongoose';
 import { IDriverProfile, ReputationTier } from '../interfaces/IDriverProfile';
+import { nowUTC } from '../utils/dateUtils';
 
 const vehicleDetailsSchema = new Schema(
   {
@@ -16,7 +17,7 @@ const vehicleDetailsSchema = new Schema(
     year: {
       type: Number,
       min: [1980, 'Vehicle year must be 1980 or later'],
-      max: [new Date().getFullYear() + 1, 'Vehicle year cannot be in the future'],
+      max: [nowUTC().getUTCFullYear() + 1, 'Vehicle year cannot be in the future'],
     },
     plateNumber: {
       type: String,
