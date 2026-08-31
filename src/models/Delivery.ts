@@ -1,103 +1,153 @@
-import { Document, Model, Schema, Types, model } from 'mongoose';
+import mongoose, { Schema, Document } from 'mongoose';
 
-/** Lifecycle states a delivery moves through. */
-export const DELIVERY_STATUSES = [
-  'pending',
-  'accepted',
-  'in_transit',
-  'delivered',
-  'cancelled',
-  'disputed',
-] as const;
-export type DeliveryStatus = (typeof DELIVERY_STATUSES)[number];
-
-export interface IDelivery {
-  reference: string;
-  sender: Types.ObjectId;
-  courier?: Types.ObjectId;
-  pickupAddress: string;
-  dropoffAddress: string;
+export interface IDelivery extends Document {
+  deliveryId: string;
+  driverId: string;
+  userId: string;
+  sender: mongoose.Types.ObjectId;
+  recipient: mongoose.Types.ObjectId;
+  contractId?: string;
+  metadata?: Record<string, unknown>;
+  trackingNumber?: string;
+  customer?: ICustomer;
+  pickup?: ILocation;
+  dropoff?: ILocation;
+  package?: IPackage;
+  deliveryFee?: number;
+  escrowAmount?: number;
+  notes?: string;
+  pickupCoordinates: {
+    lat: number;
+    lng: number;
+    address: string;
+  };
+  dropoffCoordinates: {
+    lat: number;
+    lng: number;
+    address: string;
+  };
   status: DeliveryStatus;
-  amount: number;
-  currency: string;
+  distance?: number;
+  estimatedDuration?: number;
+  actualDuration?: number;
+  isDeleted?: boolean;
+  deletedAt?: Date | null;
+  deletedBy?: string;
   createdAt: Date;
   updatedAt: Date;
+  softDelete(userId?: string): Promise<this>;
+  restore(): Promise<this>;
 }
 
-export type IDeliveryDocument = IDelivery & Document;
+export enum DeliveryStatus {
+  PENDING = 'pending',
+  FUNDED = 'funded',
+  ASSIGNED = 'assigned',
+  IN_PROGRESS = 'in_progress',
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled',
+}
 
-const deliverySchema = new Schema<IDeliveryDocument>(
+export interface ICustomer {
+  name: string;
+  phone: string;
+  email?: string;
+}
+
+export interface ILocation {
+  address: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  instructions?: string;
+}
+
+export interface IPackage {
+  description: string;
+  weight: number;
+  size?: string;
+  isFragile?: boolean;
+  requiresSignature?: boolean;
+}
+
+const DeliverySchema = new Schema<IDelivery>(
   {
-    reference: {
-      type: String,
-      required: [true, 'Delivery reference is required'],
-      unique: true,
-      trim: true,
-      uppercase: true,
+    deliveryId: { type: String, unique: true, sparse: true },
+    driverId: { type: String },
+    userId: { type: String },
+    sender: { type: Schema.Types.ObjectId, ref: 'User' },
+    recipient: { type: Schema.Types.ObjectId, ref: 'User' },
+    contractId: { type: String, trim: true },
+    metadata: { type: Schema.Types.Mixed },
+    trackingNumber: { type: String, unique: true, sparse: true },
+    customer: { type: Schema.Types.Mixed },
+    pickup: { type: Schema.Types.Mixed },
+    dropoff: { type: Schema.Types.Mixed },
+    package: { type: Schema.Types.Mixed },
+    deliveryFee: { type: Number },
+    escrowAmount: { type: Number },
+    notes: { type: String },
+    pickupCoordinates: {
+      lat: { type: Number },
+      lng: { type: Number },
+      address: { type: String },
     },
-    sender: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      required: [true, 'Sender is required'],
-      index: true,
-    },
-    courier: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      default: null,
-      index: true,
-    },
-    pickupAddress: {
-      type: String,
-      required: [true, 'Pickup address is required'],
-      trim: true,
-      maxlength: [250, 'Pickup address must not exceed 250 characters'],
-    },
-    dropoffAddress: {
-      type: String,
-      required: [true, 'Dropoff address is required'],
-      trim: true,
-      maxlength: [250, 'Dropoff address must not exceed 250 characters'],
+    dropoffCoordinates: {
+      lat: { type: Number },
+      lng: { type: Number },
+      address: { type: String },
     },
     status: {
       type: String,
-      enum: DELIVERY_STATUSES,
-      default: 'pending',
-      index: true,
+      enum: Object.values(DeliveryStatus),
+      default: DeliveryStatus.PENDING,
     },
-    amount: {
-      type: Number,
-      required: [true, 'Delivery amount is required'],
-      min: [0, 'Delivery amount cannot be negative'],
-    },
-    currency: {
-      type: String,
-      default: 'XLM',
-      trim: true,
-      uppercase: true,
-    },
+    distance: { type: Number },
+    estimatedDuration: { type: Number },
+    actualDuration: { type: Number },
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: String },
   },
-  {
-    timestamps: true,
-    toJSON: {
-      virtuals: true,
-      transform: (_doc, ret: Record<string, unknown>): Record<string, unknown> => {
-        ret.id = ret._id?.toString();
-        delete ret._id;
-        delete ret.__v;
-        return ret;
-      },
-    },
-  },
+  { timestamps: true, strict: false },
 );
 
-// Compound index backing the common "my deliveries, newest first" access path.
-deliverySchema.index({ sender: 1, createdAt: -1 });
-deliverySchema.index({ status: 1, createdAt: -1 });
+// ─── Indexes ────────────────────────────────────────────────────────────────
+// trackingNumber/deliveryId already get unique indexes from `unique: true` above.
 
-export const Delivery: Model<IDeliveryDocument> = model<IDeliveryDocument>(
-  'Delivery',
-  deliverySchema,
-);
+// GET /api/v1/deliveries: optional status filter, always sorted by createdAt desc
+// (src/services/delivery.service.ts#list). A leading createdAt-only match still
+// benefits unfiltered listing since it's an index prefix.
+DeliverySchema.index({ status: 1, createdAt: -1 });
+
+// GET /api/v1/deliveries?driver=...: optional driver filter, same sort
+// (src/services/delivery.service.ts#list).
+DeliverySchema.index({ driver: 1, createdAt: -1 });
+
+// GET /api/v1/deliveries/archived: exact match on isDeleted, sorted by deletedAt desc
+// (src/services/delivery.service.ts#listArchived).
+DeliverySchema.index({ isDeleted: 1, deletedAt: -1 });
+
+DeliverySchema.methods.softDelete = async function (
+  this: IDelivery,
+  userId?: string,
+): Promise<IDelivery> {
+  this.isDeleted = true;
+  this.deletedAt = new Date();
+  if (userId) {
+    this.deletedBy = userId;
+  }
+  return this.save();
+};
+
+DeliverySchema.methods.restore = async function (this: IDelivery): Promise<IDelivery> {
+  this.isDeleted = false;
+  this.deletedAt = null;
+  this.deletedBy = undefined;
+  return this.save();
+};
+
+const Delivery = mongoose.model<IDelivery>('Delivery', DeliverySchema);
 
 export default Delivery;
+export { Delivery };

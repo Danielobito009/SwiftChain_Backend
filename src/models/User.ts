@@ -1,106 +1,148 @@
-import { Document, Model, Schema, model } from 'mongoose';
+import mongoose, { Schema } from 'mongoose';
 import bcrypt from 'bcryptjs';
+import { IUser, UserRole, UserStatus } from '../interfaces/IUser';
+import env from '../config/env';
 
-const DEFAULT_BCRYPT_ROUNDS = 10;
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-/** Roles recognized by the authorization layer. */
-export const USER_ROLES = ['user', 'driver', 'admin'] as const;
-export type UserRole = (typeof USER_ROLES)[number];
-
-/** Account lifecycle states. Suspension is an audited admin action. */
-export const USER_STATUSES = ['active', 'suspended'] as const;
-export type UserStatus = (typeof USER_STATUSES)[number];
-
-export interface IUser {
-  name: string;
-  email: string;
-  password: string;
-  role: UserRole;
-  status: UserStatus;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface IUserDocument extends IUser, Document {
-  comparePassword(candidate: string): Promise<boolean>;
-}
-
-const userSchema = new Schema<IUserDocument>(
+const userSchema = new Schema<IUser>(
   {
-    name: {
-      type: String,
-      required: [true, 'Name is required'],
-      trim: true,
-      minlength: [2, 'Name must be at least 2 characters long'],
-      maxlength: [100, 'Name must not exceed 100 characters'],
-    },
     email: {
       type: String,
       required: [true, 'Email is required'],
       unique: true,
-      trim: true,
       lowercase: true,
-      match: [EMAIL_REGEX, 'A valid email address is required'],
+      trim: true,
+      match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email address'],
     },
     password: {
       type: String,
       required: [true, 'Password is required'],
-      minlength: [8, 'Password must be at least 8 characters long'],
-      // Excluded by default so the hash never leaks through generic reads.
+      minlength: [8, 'Password must be at least 8 characters'],
       select: false,
+    },
+    firstName: {
+      type: String,
+      required: [true, 'First name is required'],
+      trim: true,
+      maxlength: [50, 'First name cannot exceed 50 characters'],
+    },
+    lastName: {
+      type: String,
+      required: [true, 'Last name is required'],
+      trim: true,
+      maxlength: [50, 'Last name cannot exceed 50 characters'],
     },
     role: {
       type: String,
-      enum: USER_ROLES,
-      default: 'user',
-      index: true,
+      enum: Object.values(UserRole),
+      default: UserRole.USER,
     },
     status: {
       type: String,
-      enum: USER_STATUSES,
-      default: 'active',
-      index: true,
+      enum: Object.values(UserStatus),
+      default: UserStatus.ACTIVE,
+    },
+    suspendedReason: {
+      type: String,
+    },
+    suspendedAt: {
+      type: Date,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    walletAddress: {
+      type: String,
+      trim: true,
+      unique: true,
+      sparse: true,
+      match: [/^G[A-Z2-7]{55}$/, 'Please provide a valid Stellar public key'],
+    },
+    profilePicture: {
+      type: String,
+      trim: true,
+    },
+    profilePictureKey: {
+      type: String,
+      trim: true,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: String,
     },
   },
   {
     timestamps: true,
     toJSON: {
-      virtuals: true,
-      transform: (_doc, ret: Record<string, unknown>): Record<string, unknown> => {
-        ret.id = ret._id?.toString();
+      transform(_doc, ret): Record<string, unknown> {
+        ret.id = ret._id;
         delete ret._id;
-        delete ret.password;
         delete ret.__v;
+        delete ret.password;
         return ret;
       },
     },
   },
 );
 
-// Supports the default `createdAt` sort used by the paginated users endpoint.
-userSchema.index({ createdAt: -1 });
-
-/** Hash the password with bcrypt before persisting whenever it changes. */
-userSchema.pre('save', async function hashPassword(next) {
+// Hash password before saving
+userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) {
-    next();
-    return;
+    return next();
   }
 
-  const rounds = Number(process.env.BCRYPT_ROUNDS) || DEFAULT_BCRYPT_ROUNDS;
-  const salt = await bcrypt.genSalt(rounds);
-  this.password = await bcrypt.hash(this.password, salt);
-  next();
+  try {
+    const rounds = env.BCRYPT_ROUNDS;
+    const salt = await bcrypt.genSalt(rounds);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error as Error);
+  }
 });
 
-/** Compare a plaintext candidate password against the stored hash. */
-userSchema.methods.comparePassword = async function comparePassword(
-  candidate: string,
-): Promise<boolean> {
-  return bcrypt.compare(candidate, this.password);
+// Instance method to compare passwords
+userSchema.methods.comparePassword = async function (candidatePassword: string): Promise<boolean> {
+  return bcrypt.compare(candidatePassword, this.password);
 };
 
-export const User: Model<IUserDocument> = model<IUserDocument>('User', userSchema);
+// Soft delete instance method
+userSchema.methods.softDelete = async function (userId?: string): Promise<IUser> {
+  this.isDeleted = true;
+  this.deletedAt = new Date();
+  if (userId) {
+    this.deletedBy = userId;
+  }
+  return this.save();
+};
+
+// Restore instance method
+userSchema.methods.restore = async function (): Promise<IUser> {
+  this.isDeleted = false;
+  this.deletedAt = null;
+  this.deletedBy = undefined;
+  return this.save();
+};
+
+// Index for efficient email lookups (login, registration duplicate checks).
+userSchema.index({ email: 1 });
+
+// Every authenticated request checks role (src/middleware/auth.ts#authorize,
+// src/middleware/requireRole.ts) and account status (src/middleware/authenticate.ts
+// blocks suspended/banned accounts); this compound index supports filtering
+// users by role and/or status, e.g. an admin listing all suspended drivers.
+userSchema.index({ role: 1, status: 1 });
+
+// Compound index for filtering active/non-deleted users
+userSchema.index({ isDeleted: 1, status: 1 });
+
+const User = mongoose.model<IUser>('User', userSchema);
 
 export default User;

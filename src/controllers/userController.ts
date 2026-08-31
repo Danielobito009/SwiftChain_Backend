@@ -1,105 +1,241 @@
+import { Request, Response, NextFunction } from 'express';
 import { StatusCodes } from 'http-status-codes';
+import User from '../models/User';
+import { userService } from '../services/userService';
+import AppError from '../utils/AppError';
 import asyncHandler from '../utils/asyncHandler';
-import { resolveQueryOptions } from '../middlewares/queryMiddleware';
-import {
-  changeUserRole,
-  getUserById,
-  listUsers,
-  reinstateUser,
-  suspendUser,
-} from '../services/userService';
-import { validateActionReason, validateRoleChangeInput } from '../validators/adminValidator';
-import ApiError from '../utils/ApiError';
+import { sendSuccess } from '../utils/responseWrapper';
+import type { AuthenticatedRequest } from '../middlewares/authMiddleware';
+import { UserRole, UserStatus } from '../interfaces/IUser';
 
-/** Reads the authenticated admin id, guarding against an unprotected mount. */
-const requireAdminId = (userId: string | undefined): string => {
-  if (!userId) {
-    throw ApiError.unauthorized('Authentication is required');
-  }
-  return userId;
-};
+class UserController {
+  /**
+   * PUT /api/v1/users/wallet
+   *
+   * Links or updates the authenticated user's Stellar wallet address.
+   */
+  public updateWallet = asyncHandler(
+    async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
+      const { user } = req as AuthenticatedRequest;
+      const userId = user?.userId || user?.id;
 
-/**
- * GET /api/v1/users
- *
- * Returns a paginated, sortable and filterable list of users. The query
- * string is parsed by `buildQueryOptions` before this handler runs.
- */
-export const getUsers = asyncHandler(async (req, res) => {
-  const { items, meta } = await listUsers(resolveQueryOptions(req));
+      if (!userId) {
+        throw new AppError('Authentication required.', StatusCodes.UNAUTHORIZED);
+      }
 
-  res.status(StatusCodes.OK).json({
-    status: 'success',
-    message: 'Users retrieved successfully',
-    data: items,
-    meta,
-  });
-});
+      const { walletAddress } = req.body as { walletAddress: string };
 
-/** GET /api/v1/users/:userId */
-export const getUser = asyncHandler(async (req, res) => {
-  const user = await getUserById(req.params.userId);
+      const existing = await User.findOne({ walletAddress, _id: { $ne: userId } });
+      if (existing) {
+        throw new AppError(
+          'This wallet address is already linked to another account.',
+          StatusCodes.CONFLICT,
+        );
+      }
 
-  res.status(StatusCodes.OK).json({
-    status: 'success',
-    message: 'User retrieved successfully',
-    data: user,
-  });
-});
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { walletAddress },
+        { new: true, runValidators: true },
+      );
 
-/**
- * PATCH /api/v1/users/:userId/suspend
- *
- * Suspends an account. The action is written to the audit log before the
- * change is persisted.
- */
-export const suspend = asyncHandler(async (req, res) => {
-  const user = await suspendUser(req.params.userId, {
-    adminId: requireAdminId(req.user?.id),
-    reason: validateActionReason(req.body),
-    ipAddress: req.ip,
-    userAgent: req.get('user-agent') ?? undefined,
-  });
+      if (!updatedUser) {
+        throw new AppError('User not found.', StatusCodes.NOT_FOUND);
+      }
 
-  res.status(StatusCodes.OK).json({
-    status: 'success',
-    message: 'User suspended successfully',
-    data: user,
-  });
-});
+      sendSuccess(
+        res,
+        { user: updatedUser },
+        'Wallet address updated successfully',
+        StatusCodes.OK,
+      );
+    },
+  );
 
-/** PATCH /api/v1/users/:userId/reinstate */
-export const reinstate = asyncHandler(async (req, res) => {
-  const user = await reinstateUser(req.params.userId, {
-    adminId: requireAdminId(req.user?.id),
-    reason: validateActionReason(req.body),
-    ipAddress: req.ip,
-    userAgent: req.get('user-agent') ?? undefined,
-  });
+  /**
+   * GET /api/v1/users/:id
+   *
+   * Retrieve a single user by ID.
+   * Protected — requires authentication.
+   */
+  public getUserById = asyncHandler(
+    async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
+      const { id } = req.params;
+      const user = await userService.getUserById(id);
 
-  res.status(StatusCodes.OK).json({
-    status: 'success',
-    message: 'User reinstated successfully',
-    data: user,
-  });
-});
+      res.status(StatusCodes.OK).json({
+        status: 'success',
+        data: { user },
+      });
+    },
+  );
 
-/** PATCH /api/v1/users/:userId/role */
-export const updateRole = asyncHandler(async (req, res) => {
-  const { role, reason } = validateRoleChangeInput(req.body);
+  /**
+   * PUT /api/v1/users/:id
+   *
+   * Update user profile fields.
+   * Protected — requires authentication and admin role.
+   */
+  public updateUser = asyncHandler(
+    async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
+      const { id } = req.params;
+      const allowedFields = ['firstName', 'lastName', 'role', 'status', 'walletAddress', 'profilePicture', 'profilePictureKey'];
+      const updateInput: Record<string, unknown> = {};
 
-  const user = await changeUserRole(req.params.userId, role, {
-    adminId: requireAdminId(req.user?.id),
-    reason,
-    ipAddress: req.ip,
-    userAgent: req.get('user-agent') ?? undefined,
-  });
+      for (const key of allowedFields) {
+        if (req.body[key] !== undefined) {
+          updateInput[key] = req.body[key];
+        }
+      }
 
-  res.status(StatusCodes.OK).json({
-    status: 'success',
-    message: 'User role updated successfully',
-    data: user,
-  });
-});
+      if (Object.keys(updateInput).length === 0) {
+        throw new AppError('No valid fields provided for update.', StatusCodes.BAD_REQUEST);
+      }
 
-export default { getUsers, getUser, suspend, reinstate, updateRole };
+      const user = await userService.updateUser(id, updateInput);
+
+      res.status(StatusCodes.OK).json({
+        status: 'success',
+        message: 'User updated successfully',
+        data: { user },
+      });
+    },
+  );
+
+  /**
+   * DELETE /api/v1/users/:id
+   *
+   * Soft delete a user and cascade to related records.
+   * Protected — requires authentication and admin role.
+   */
+  public deleteUser = asyncHandler(
+    async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
+      const { user: authUser } = req as AuthenticatedRequest;
+      const { id } = req.params;
+      const adminId = authUser?.userId || authUser?.id;
+
+      const result = await userService.softDeleteUser(id, adminId);
+
+      res.status(StatusCodes.OK).json({
+        status: 'success',
+        message: 'User deleted successfully',
+        data: {
+          user: result.user,
+          cascaded: result.cascaded,
+        },
+      });
+    },
+  );
+
+  /**
+   * POST /api/v1/users/:id/restore
+   *
+   * Restore a soft-deleted user.
+   * Protected — requires authentication and admin role.
+   */
+  public restoreUser = asyncHandler(
+    async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
+      const { id } = req.params;
+      const user = await userService.restoreUser(id);
+
+      res.status(StatusCodes.OK).json({
+        status: 'success',
+        message: 'User restored successfully',
+        data: { user },
+      });
+    },
+  );
+
+  /**
+   * PUT /api/v1/users/:id/password
+   *
+   * Update user password.
+   * Protected — requires authentication. Users can only update their own password.
+   */
+  public updatePassword = asyncHandler(
+    async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
+      const { user: authUser } = req as AuthenticatedRequest;
+      const currentUserId = authUser?.userId || authUser?.id;
+      const { id } = req.params;
+
+      if (currentUserId !== id) {
+        throw new AppError(
+          'You can only update your own password.',
+          StatusCodes.FORBIDDEN,
+        );
+      }
+
+      const { currentPassword, newPassword } = req.body as {
+        currentPassword: string;
+        newPassword: string;
+      };
+
+      if (!currentPassword || !newPassword) {
+        throw new AppError(
+          'Both currentPassword and newPassword are required.',
+          StatusCodes.BAD_REQUEST,
+        );
+      }
+
+      if (newPassword.length < 8) {
+        throw new AppError(
+          'New password must be at least 8 characters.',
+          StatusCodes.BAD_REQUEST,
+        );
+      }
+
+      const user = await userService.updatePassword(id, { currentPassword, newPassword });
+
+      res.status(StatusCodes.OK).json({
+        status: 'success',
+        message: 'Password updated successfully',
+        data: { user },
+      });
+    },
+  );
+
+  /**
+   * GET /api/v1/users/deleted
+   *
+   * List soft-deleted users.
+   * Protected — requires authentication and admin role.
+   */
+  public listDeletedUsers = asyncHandler(
+    async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
+      const {
+        role,
+        status,
+        search,
+        page = '1',
+        limit = '10',
+      } = req.query as Record<string, unknown>;
+
+      const parsedPage = Math.max(1, parseInt(page as string, 10) || 1);
+      const parsedLimit = Math.min(100, Math.max(1, parseInt(limit as string, 10) || 10));
+
+      const filters: Parameters<typeof userService.getDeletedUsers>[0] = {
+        page: parsedPage,
+        limit: parsedLimit,
+      };
+
+      if (role) filters.role = role as UserRole;
+      if (status) filters.status = status as UserStatus;
+      if (search) filters.search = search as string;
+
+      const result = await userService.getDeletedUsers(filters);
+
+      res.status(StatusCodes.OK).json({
+        status: 'success',
+        data: result.data,
+        pagination: {
+          total: result.total,
+          page: result.page,
+          limit: result.limit,
+          totalPages: result.totalPages,
+        },
+      });
+    },
+  );
+}
+
+export default new UserController();

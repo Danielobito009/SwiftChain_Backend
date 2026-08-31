@@ -1,81 +1,85 @@
+import { Request, Response, NextFunction } from 'express';
 import { StatusCodes } from 'http-status-codes';
-import asyncHandler from '../utils/asyncHandler';
-import { resolveQueryOptions } from '../middlewares/queryMiddleware';
-import { getEscrowById, listEscrows, refundEscrow, releaseEscrow } from '../services/escrowService';
-import { validateActionReason } from '../validators/adminValidator';
-import ApiError from '../utils/ApiError';
+import { getFlaggedEscrows, resolveEscrow } from '../services/escrowService';
+import type { IUser } from '../interfaces/IUser';
+import AppError from '../utils/AppError';
+import { sendSuccess } from '../utils/responseWrapper';
 
-/** Reads the authenticated admin id, guarding against an unprotected mount. */
-const requireAdminId = (userId: string | undefined): string => {
-  if (!userId) {
-    throw ApiError.unauthorized('Authentication is required');
+// ─── GET /api/v1/admin/escrows/flagged ─────────────────────────────────────────
+
+/**
+ * Returns a paginated list of escrows flagged as expired for admin review.
+ *
+ * Query params:
+ *   - page   {number} Optional — defaults to 1.
+ *   - limit  {number} Optional — defaults to 20, capped at 100.
+ */
+export const listFlaggedEscrows = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const page = req.query.page ? parseInt(req.query.page as string, 10) : undefined;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+
+    if (page !== undefined && (!Number.isInteger(page) || page < 1)) {
+      throw new AppError('"page" must be a positive integer.', StatusCodes.BAD_REQUEST);
+    }
+
+    if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) {
+      throw new AppError('"limit" must be a positive integer.', StatusCodes.BAD_REQUEST);
+    }
+
+    const result = await getFlaggedEscrows({ page, limit });
+
+    sendSuccess(res, result, 'Flagged escrows retrieved successfully', StatusCodes.OK);
+  } catch (error) {
+    next(error);
   }
-  return userId;
 };
 
-/** GET /api/v1/escrows */
-export const getEscrows = asyncHandler(async (req, res) => {
-  const { items, meta } = await listEscrows(resolveQueryOptions(req));
+// ─── PATCH /api/v1/admin/escrows/:id/resolve ───────────────────────────────────
 
-  res.status(StatusCodes.OK).json({
-    status: 'success',
-    message: 'Escrows retrieved successfully',
-    data: items,
-    meta,
-  });
-});
-
-/** GET /api/v1/escrows/:escrowId */
-export const getEscrow = asyncHandler(async (req, res) => {
-  const escrow = await getEscrowById(req.params.escrowId);
-
-  res.status(StatusCodes.OK).json({
-    status: 'success',
-    message: 'Escrow retrieved successfully',
-    data: escrow,
-  });
-});
+interface ResolveEscrowBody {
+  notes?: unknown;
+}
 
 /**
- * POST /api/v1/escrows/:escrowId/refund
+ * Marks a flagged (expired) escrow as resolved.
  *
- * Refunds a held escrow to the payer. Guarded by the strict escrow mutation
- * rate limiter and recorded in the audit log.
+ * Body:
+ *   - notes {string} Required — audit trail description of the resolution.
  */
-export const refund = asyncHandler(async (req, res) => {
-  const escrow = await refundEscrow(req.params.escrowId, {
-    adminId: requireAdminId(req.user?.id),
-    reason: validateActionReason(req.body),
-    ipAddress: req.ip,
-    userAgent: req.get('user-agent') ?? undefined,
-  });
+export const resolveFlaggedEscrow = async (
+  req: Request<{ id: string }, unknown, ResolveEscrowBody>,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const adminUser = (req as Request & { user?: IUser }).user;
 
-  res.status(StatusCodes.OK).json({
-    status: 'success',
-    message: 'Escrow refunded successfully',
-    data: escrow,
-  });
-});
+    if (!adminUser) {
+      throw new AppError('Authentication required.', StatusCodes.UNAUTHORIZED);
+    }
 
-/**
- * POST /api/v1/escrows/:escrowId/release
- *
- * Releases a held escrow to the payee. Guarded by the strict escrow mutation
- * rate limiter and recorded in the audit log.
- */
-export const release = asyncHandler(async (req, res) => {
-  const escrow = await releaseEscrow(req.params.escrowId, {
-    adminId: requireAdminId(req.user?.id),
-    reason: validateActionReason(req.body),
-    ipAddress: req.ip,
-    userAgent: req.get('user-agent') ?? undefined,
-  });
+    const { notes } = req.body;
 
-  res.status(StatusCodes.OK).json({
-    status: 'success',
-    message: 'Escrow released successfully',
-    data: escrow,
-  });
-});
+    if (!notes || typeof notes !== 'string' || notes.trim().length === 0) {
+      throw new AppError(
+        'Resolution notes are required to resolve a flagged escrow.',
+        StatusCodes.BAD_REQUEST,
+      );
+    }
 
-export default { getEscrows, getEscrow, refund, release };
+    const escrow = await resolveEscrow({
+      escrowId: req.params.id,
+      adminId: adminUser._id.toString(),
+      notes: notes.trim(),
+    });
+
+    sendSuccess(res, { escrow }, 'Escrow has been resolved successfully.', StatusCodes.OK);
+  } catch (error) {
+    next(error);
+  }
+};

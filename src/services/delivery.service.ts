@@ -1,0 +1,394 @@
+import { Types } from 'mongoose';
+import httpStatus from 'http-status-codes';
+import Delivery, { IDelivery, DeliveryStatus, ILocation, IPackage } from '../models/Delivery';
+import Escrow, { EscrowLockStatus } from '../models/Escrow';
+import { AppError } from '../utils/AppError';
+import logger from '../config/logger';
+import { deliveryRepository } from '../repositories/DeliveryRepository';
+import { notificationService } from './notificationService';
+
+export interface CreateDeliveryInput {
+  trackingNumber: string;
+  customer: {
+    name: string;
+    phone: string;
+    email?: string;
+  };
+  pickup: ILocation;
+  dropoff: ILocation;
+  package: IPackage;
+  deliveryFee: number;
+  escrowAmount: number;
+  notes?: string;
+}
+
+export interface UpdateDeliveryInput {
+  status?: DeliveryStatus;
+  driver?: string;
+  estimatedDistance?: number;
+  estimatedDuration?: number;
+  stellarTransactionId?: string;
+  notes?: string;
+}
+
+export interface AssignDriverInput {
+  /** MongoDB `_id` of the delivery to assign a driver to. */
+  deliveryId: string;
+  /** The driver identifier to assign. */
+  driverId: string;
+}
+
+export interface DeliveryFilter {
+  status?: DeliveryStatus;
+  driver?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+/**
+ * Legal delivery status transitions.
+ *
+ * Encoded as a map rather than checked inline so the state machine is
+ * inspectable in one place and covered directly by tests. Terminal states map
+ * to an empty list: nothing follows a completed or cancelled delivery.
+ */
+const ALLOWED_TRANSITIONS: Record<DeliveryStatus, readonly DeliveryStatus[]> = {
+  [DeliveryStatus.PENDING]: [
+    DeliveryStatus.FUNDED,
+    DeliveryStatus.ASSIGNED,
+    DeliveryStatus.CANCELLED,
+  ],
+  [DeliveryStatus.FUNDED]: [DeliveryStatus.ASSIGNED, DeliveryStatus.CANCELLED],
+  [DeliveryStatus.ASSIGNED]: [DeliveryStatus.IN_PROGRESS, DeliveryStatus.CANCELLED],
+  [DeliveryStatus.IN_PROGRESS]: [DeliveryStatus.COMPLETED, DeliveryStatus.CANCELLED],
+  [DeliveryStatus.COMPLETED]: [],
+  [DeliveryStatus.CANCELLED]: [],
+};
+
+export class DeliveryService {
+  async create(input: CreateDeliveryInput): Promise<IDelivery> {
+    const existing = await Delivery.findOne({
+      trackingNumber: input.trackingNumber,
+    }).setOptions({ includeDeleted: true });
+
+    if (existing) {
+      throw new AppError('Delivery with this tracking number already exists', httpStatus.CONFLICT);
+    }
+
+    const delivery = await Delivery.create(input);
+    logger.info(`Delivery created: ${delivery.trackingNumber}`);
+    return delivery;
+  }
+
+  async getById(id: string): Promise<IDelivery> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new AppError('Invalid delivery ID', httpStatus.BAD_REQUEST);
+    }
+
+    const delivery = await Delivery.findById(id);
+    if (!delivery) {
+      throw new AppError('Delivery not found', httpStatus.NOT_FOUND);
+    }
+    return delivery;
+  }
+
+  async list(filters: DeliveryFilter): Promise<PaginatedResult<IDelivery>> {
+    const { status, driver, search, page = 1, limit = 10 } = filters;
+
+    const query: Record<string, unknown> = {};
+
+    if (status) {
+      query.status = status;
+    }
+
+    if (driver) {
+      query.driver = new Types.ObjectId(driver);
+    }
+
+    if (search) {
+      query.$or = [
+        { trackingNumber: { $regex: search, $options: 'i' } },
+        { 'customer.name': { $regex: search, $options: 'i' } },
+        { 'customer.phone': { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const skip = (page - 1) * limit;
+    const [data, total] = await Promise.all([
+      Delivery.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
+      Delivery.countDocuments(query).exec(),
+    ]);
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async update(id: string, input: UpdateDeliveryInput): Promise<IDelivery> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new AppError('Invalid delivery ID', httpStatus.BAD_REQUEST);
+    }
+
+    const delivery = await Delivery.findByIdAndUpdate(
+      id,
+      { $set: input },
+      { new: true, runValidators: true },
+    );
+
+    if (!delivery) {
+      throw new AppError('Delivery not found', httpStatus.NOT_FOUND);
+    }
+
+    logger.info(`Delivery updated: ${delivery.trackingNumber}`);
+    return delivery;
+  }
+
+  async archive(id: string, userId?: string): Promise<IDelivery> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new AppError('Invalid delivery ID', httpStatus.BAD_REQUEST);
+    }
+
+    const delivery = await Delivery.findById(id).setOptions({ includeDeleted: true });
+    if (!delivery) {
+      throw new AppError('Delivery not found', httpStatus.NOT_FOUND);
+    }
+
+    if (delivery.isDeleted) {
+      throw new AppError('Delivery is already archived', httpStatus.CONFLICT);
+    }
+
+    return delivery.softDelete(userId);
+  }
+
+  async restore(id: string): Promise<IDelivery> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new AppError('Invalid delivery ID', httpStatus.BAD_REQUEST);
+    }
+
+    const delivery = await Delivery.findById(id).setOptions({ includeDeleted: true });
+    if (!delivery) {
+      throw new AppError('Delivery not found', httpStatus.NOT_FOUND);
+    }
+
+    if (!delivery.isDeleted) {
+      throw new AppError('Delivery is not archived', httpStatus.CONFLICT);
+    }
+
+    return delivery.restore();
+  }
+
+  async listArchived(page = 1, limit = 10): Promise<PaginatedResult<IDelivery>> {
+    const skip = (page - 1) * limit;
+    const [data, total] = await Promise.all([
+      Delivery.find({ isDeleted: true })
+        .setOptions({ includeDeleted: true })
+        .sort({ deletedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      Delivery.countDocuments({ isDeleted: true }).setOptions({ includeDeleted: true }).exec(),
+    ]);
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * Advance a delivery to a new status and notify the parties involved.
+   *
+   * The transition is applied with a conditional update that asserts the
+   * current status, so two concurrent requests cannot both advance the same
+   * delivery — the loser matches no document and is rejected with a 409.
+   *
+   * Push notifications are dispatched after the write commits, and never
+   * affect the outcome: a delivery that has moved to `completed` stays
+   * completed even if the push provider is unreachable.
+   *
+   * @throws {AppError} 400 — invalid delivery id, or an illegal transition.
+   * @throws {AppError} 404 — delivery not found.
+   * @throws {AppError} 409 — the delivery changed status concurrently.
+   */
+  async updateStatus(id: string, nextStatus: DeliveryStatus): Promise<IDelivery> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new AppError('Invalid delivery ID', httpStatus.BAD_REQUEST);
+    }
+
+    const current = await deliveryRepository.findById(id);
+    if (!current) {
+      throw new AppError('Delivery not found', httpStatus.NOT_FOUND);
+    }
+
+    if (current.status === nextStatus) {
+      throw new AppError(
+        `Delivery is already in status '${nextStatus}'.`,
+        httpStatus.CONFLICT,
+      );
+    }
+
+    const permitted = ALLOWED_TRANSITIONS[current.status] ?? [];
+    if (!permitted.includes(nextStatus)) {
+      throw new AppError(
+        `Cannot transition a delivery from '${current.status}' to '${nextStatus}'.` +
+          (permitted.length > 0
+            ? ` Allowed next states: ${permitted.join(', ')}.`
+            : ' This is a terminal state.'),
+        httpStatus.BAD_REQUEST,
+      );
+    }
+
+    const updated = await deliveryRepository.transitionStatus(id, current.status, nextStatus);
+
+    if (!updated) {
+      // The conditional update matched nothing, so the status changed between
+      // the read above and the write — a concurrent transition won.
+      throw new AppError(
+        'Delivery status changed concurrently. Retry with the current state.',
+        httpStatus.CONFLICT,
+      );
+    }
+
+    logger.info(
+      `[DeliveryService] Status transition — delivery=${id} ` +
+        `${current.status} -> ${nextStatus}`,
+    );
+
+    // Fire-and-forget by design: notification failures are recorded inside the
+    // notification service and must not roll back a committed transition.
+    await notificationService.notifyDeliveryTransition(updated, nextStatus);
+
+    return updated;
+  }
+
+  /**
+   * Assign a driver to a delivery, **only if the Soroban escrow contract for
+   * that delivery is fully initialised (locked)**.
+   *
+   * Guard rules (checked in order):
+   *   1. Delivery must exist and not be soft-deleted.
+   *   2. Delivery must not already be in a terminal state (completed/cancelled).
+   *   3. Delivery must not already have a driver assigned.
+   *   4. An Escrow record must exist for the delivery.
+   *   5. The escrow `lockStatus` must be `LOCKED`.
+   *      - `PENDING`  → contract initialisation has not completed yet (409).
+   *      - `RELEASED` / `REFUNDED` / `DISPUTED` → funds are no longer held (409).
+   *      - Missing escrow record → contract was never initialised (422).
+   *
+   * On success the delivery `status` is advanced to `ASSIGNED` and the
+   * `driverId` field is set.  Both writes happen in the same document save so
+   * there is no partial-update window.
+   *
+   * @throws {AppError} 400 — invalid delivery id format.
+   * @throws {AppError} 404 — delivery not found.
+   * @throws {AppError} 409 — delivery already assigned, completed, or cancelled.
+   * @throws {AppError} 422 — escrow record absent (contract never initialised).
+   * @throws {AppError} 409 — escrow exists but is not in LOCKED state.
+   */
+  async assignDriver(input: AssignDriverInput): Promise<IDelivery> {
+    const { deliveryId, driverId } = input;
+
+    if (!Types.ObjectId.isValid(deliveryId)) {
+      throw new AppError('Invalid delivery ID', httpStatus.BAD_REQUEST);
+    }
+
+    // ── 1. Load delivery ────────────────────────────────────────────────────
+    const delivery = await Delivery.findById(deliveryId);
+    if (!delivery) {
+      throw new AppError('Delivery not found', httpStatus.NOT_FOUND);
+    }
+
+    // ── 2. Guard: terminal statuses ─────────────────────────────────────────
+    if (
+      delivery.status === DeliveryStatus.COMPLETED ||
+      delivery.status === DeliveryStatus.CANCELLED
+    ) {
+      throw new AppError(
+        `Cannot assign a driver to a delivery with status '${delivery.status}'.`,
+        httpStatus.CONFLICT,
+      );
+    }
+
+    // ── 3. Guard: already assigned ──────────────────────────────────────────
+    if (delivery.status === DeliveryStatus.ASSIGNED) {
+      throw new AppError(
+        'A driver has already been assigned to this delivery.',
+        httpStatus.CONFLICT,
+      );
+    }
+
+    // ── 4. Load escrow record ───────────────────────────────────────────────
+    const escrow = await Escrow.findOne({ delivery: delivery._id });
+
+    if (!escrow) {
+      logger.warn(
+        `[DeliveryService] assignDriver blocked — no escrow record for delivery=${deliveryId}`,
+      );
+      throw new AppError(
+        'Driver assignment is not allowed: the Soroban escrow contract for this delivery ' +
+          'has not been initialised. Ensure the escrow is funded on-chain before assigning a driver.',
+        httpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+
+    // ── 5. Guard: escrow must be LOCKED ─────────────────────────────────────
+    if (escrow.lockStatus !== EscrowLockStatus.LOCKED) {
+      const statusDescriptions: Record<EscrowLockStatus, string> = {
+        [EscrowLockStatus.PENDING]:
+          'the escrow contract initialisation is still pending — funds have not been locked yet',
+        [EscrowLockStatus.LOCKED]: '', // handled above (success path)
+        [EscrowLockStatus.RELEASED]:
+          'the escrowed funds have already been released',
+        [EscrowLockStatus.REFUNDED]:
+          'the escrowed funds have been refunded',
+        [EscrowLockStatus.DISPUTED]:
+          'the escrow is currently under dispute',
+      };
+
+      const reason =
+        statusDescriptions[escrow.lockStatus] ??
+        `the escrow is in an unexpected state '${escrow.lockStatus}'`;
+
+      logger.warn(
+        `[DeliveryService] assignDriver blocked — escrow lockStatus=${escrow.lockStatus} ` +
+          `delivery=${deliveryId}`,
+      );
+
+      throw new AppError(
+        `Driver assignment rejected: ${reason}. ` +
+          'The escrow contract must be in the LOCKED state before a driver can be assigned.',
+        httpStatus.CONFLICT,
+      );
+    }
+
+    // ── All guards passed — perform the assignment ──────────────────────────
+    delivery.driverId = driverId;
+    delivery.status = DeliveryStatus.ASSIGNED;
+    const updated = await delivery.save();
+
+    logger.info(
+      `[DeliveryService] Driver assigned — delivery=${deliveryId} ` +
+        `driver=${driverId} escrow=${String(escrow._id)}`,
+    );
+
+    return updated;
+  }
+}
+
+export const deliveryService = new DeliveryService();

@@ -1,59 +1,27 @@
 import { Router } from 'express';
-import { getEscrow, getEscrows, refund, release } from '../controllers/escrowController';
-import { authenticate, authorize } from '../middlewares/auth';
-import { escrowLimiter, escrowMutationLimiter } from '../middlewares/rateLimiter';
-import { buildQueryOptions } from '../middlewares/queryMiddleware';
-import { QueryFeatureConfig } from '../types/query';
+import authenticate from '../middleware/authenticate';
+import requireRole from '../middleware/requireRole';
+import { listFlaggedEscrows, resolveFlaggedEscrow } from '../controllers/escrowController';
+import { UserRole } from '../interfaces/IUser';
 
 const router = Router();
 
-const escrowQueryConfig: QueryFeatureConfig = {
-  sortableFields: ['createdAt', 'updatedAt', 'amount', 'status'],
-  filterableFields: {
-    status: 'string',
-    currency: 'string',
-    amount: 'number',
-    payer: 'objectId',
-    payee: 'objectId',
-    delivery: 'objectId',
-    createdAt: 'date',
-  },
-  defaultSort: { createdAt: -1 },
-  defaultLimit: 20,
-  maxLimit: 100,
-};
-
-// Escrow endpoints move funds, so the whole router is authenticated and
-// rate limited before any handler runs.
+// All escrow admin routes require a valid JWT AND the admin role
 router.use(authenticate);
-router.use(escrowLimiter);
+router.use(requireRole(UserRole.ADMIN));
 
 /**
- * @route   GET /api/v1/escrows
- * @desc    List escrow records with pagination, sorting and filtering
- * @access  Authenticated
+ * @route   GET /api/v1/admin/escrows/flagged
+ * @desc    List escrows flagged as expired for admin review
+ * @access  Admin only
  */
-router.get('/', buildQueryOptions(escrowQueryConfig), getEscrows);
+router.get('/flagged', listFlaggedEscrows);
 
 /**
- * @route   GET /api/v1/escrows/:escrowId
- * @desc    Retrieve a single escrow record
- * @access  Authenticated
+ * @route   PATCH /api/v1/admin/escrows/:id/resolve
+ * @desc    Resolve a flagged (expired) escrow
+ * @access  Admin only
  */
-router.get('/:escrowId', getEscrow);
-
-/**
- * @route   POST /api/v1/escrows/:escrowId/refund
- * @desc    Refund a held escrow to the payer (audited)
- * @access  Admin (strictly rate limited)
- */
-router.post('/:escrowId/refund', authorize('admin'), escrowMutationLimiter, refund);
-
-/**
- * @route   POST /api/v1/escrows/:escrowId/release
- * @desc    Release a held escrow to the payee (audited)
- * @access  Admin (strictly rate limited)
- */
-router.post('/:escrowId/release', authorize('admin'), escrowMutationLimiter, release);
+router.patch('/:id/resolve', resolveFlaggedEscrow);
 
 export default router;

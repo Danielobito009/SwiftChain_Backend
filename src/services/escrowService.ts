@@ -1,103 +1,177 @@
-import { Types } from 'mongoose';
-import Escrow, { IEscrowDocument } from '../models/Escrow';
-import ApiError from '../utils/ApiError';
-import { PaginatedResult, QueryOptions } from '../types/query';
-import { buildPaginationMeta } from '../middlewares/queryMiddleware';
-import { recordAction } from './auditLogService';
-import { AdminActionContext } from './userService';
+import { StatusCodes } from 'http-status-codes';
+import mongoose from 'mongoose';
+import Escrow, { EscrowLockStatus, IEscrow } from '../models/Escrow';
+import { sorobanService } from '../blockchain/soroban.service';
+import AppError from '../utils/AppError';
+import logger from '../config/logger';
+import { nowUTC } from '../utils/dateUtils';
 
-/** Loads an escrow by id, rejecting malformed ids before querying. */
-const findEscrowOrFail = async (escrowId: string): Promise<IEscrowDocument> => {
-  if (!Types.ObjectId.isValid(escrowId)) {
-    throw ApiError.badRequest('The supplied escrow id is not a valid identifier');
-  }
+// ─── DTOs ──────────────────────────────────────────────────────────────────────
 
-  const escrow = await Escrow.findById(escrowId).exec();
-  if (!escrow) {
-    throw ApiError.notFound('Escrow not found');
-  }
+export interface ScanExpiredEscrowsResult {
+  scannedAt: string;
+  flaggedCount: number;
+  flaggedEscrows: IEscrow[];
+}
 
-  return escrow;
-};
+export interface GetFlaggedEscrowsInput {
+  page?: number;
+  limit?: number;
+}
 
-/** Returns a page of escrow records for the supplied query options. */
-export const listEscrows = async (
-  options: QueryOptions,
-): Promise<PaginatedResult<Record<string, unknown>>> => {
-  const [items, totalItems] = await Promise.all([
-    Escrow.find(options.filter)
-      .populate('payer', 'name email')
-      .populate('payee', 'name email')
-      .sort(options.sort)
-      .skip(options.skip)
-      .limit(options.limit)
-      .lean({ virtuals: true })
-      .exec(),
-    Escrow.countDocuments(options.filter).exec(),
-  ]);
+export interface GetFlaggedEscrowsResult {
+  escrows: IEscrow[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
 
-  return {
-    items: items as unknown as Record<string, unknown>[],
-    meta: buildPaginationMeta(totalItems, options.page, options.limit),
-  };
-};
+export interface ResolveEscrowInput {
+  escrowId: string;
+  adminId: string;
+  notes: string;
+}
 
-/** Returns a single escrow record by id. */
-export const getEscrowById = async (escrowId: string): Promise<Record<string, unknown>> => {
-  const escrow = await findEscrowOrFail(escrowId);
-  return escrow.toJSON();
+// ─── Service ───────────────────────────────────────────────────────────────────
+
+/**
+ * Scans for escrows whose lock period has exceeded their configured TTL and
+ * marks them as `expired`.
+ *
+ * Called on a recurring schedule by the escrow monitor cron job. Runs a
+ * single `updateMany` for efficiency, then reloads the flagged documents for
+ * logging/reporting purposes.
+ *
+ * The current Soroban ledger sequence is stamped onto each flagged escrow so
+ * there is an on-chain-anchored audit trail of when the expiry was detected.
+ *
+ * Note: This function is commented out as the schema doesn't include expired status
+ * or expiresAt field in the current Escrow model.
+ */
+export const scanForExpiredEscrows = async (): Promise<ScanExpiredEscrowsResult> => {
+  const now = nowUTC();
+
+  // Note: Commented out until EscrowStatus.EXPIRED and expiresAt field are added to model
+  // const expiredCandidates = await Escrow.find({
+  //   status: EscrowStatus.LOCKED,
+  //   expiresAt: { $lte: now },
+  // });
+
+  // if (expiredCandidates.length === 0) {
+  //   return { scannedAt: now.toISOString(), flaggedCount: 0, flaggedEscrows: [] };
+  // }
+
+  // let flaggedLedger: number | undefined;
+  // try {
+  //   flaggedLedger = await sorobanService.getLatestLedger();
+  // } catch (err) {
+  //   const message = err instanceof Error ? err.message : 'Unknown error';
+  //   logger.warn(
+  //     `[EscrowMonitor] Failed to fetch latest Soroban ledger for audit stamp: ${message}`,
+  //   );
+  // }
+
+  // const idsToFlag = expiredCandidates.map((escrow) => escrow._id);
+
+  // await Escrow.updateMany(
+  //   { _id: { $in: idsToFlag } },
+  //   {
+  //     $set: {
+  //       status: EscrowStatus.EXPIRED,
+  //       flaggedAt: now,
+  //       ...(flaggedLedger !== undefined ? { flaggedLedger } : {}),
+  //     },
+  //   },
+  // );
+
+  // const flaggedEscrows = await Escrow.find({ _id: { $in: idsToFlag } });
+
+  // logger.info(
+  //   `[EscrowMonitor] Flagged ${flaggedEscrows.length} expired escrow(s) at ledger=${
+  //     flaggedLedger ?? 'unknown'
+  //   }`,
+  // );
+
+  // return {
+  //   scannedAt: now.toISOString(),
+  //   flaggedCount: flaggedEscrows.length,
+  //   flaggedEscrows,
+  // };
+
+  logger.info('[EscrowMonitor] Scan for expired escrows - feature not yet implemented');
+  return { scannedAt: now.toISOString(), flaggedCount: 0, flaggedEscrows: [] };
 };
 
 /**
- * Moves an escrow to a terminal settlement state and audits the action.
+ * Retrieves a paginated list of expired escrows flagged for admin review.
  *
- * The audit entry is written first: an unauditable settlement must not
- * proceed, since these transitions move funds and cannot be undone.
+ * Note: This function is commented out as the schema doesn't include expired status
+ * in the current Escrow model.
  */
-const settleEscrow = async (
-  escrowId: string,
-  nextStatus: 'released' | 'refunded',
-  context: AdminActionContext,
-): Promise<Record<string, unknown>> => {
-  const escrow = await findEscrowOrFail(escrowId);
+export const getFlaggedEscrows = async (
+  input: GetFlaggedEscrowsInput,
+): Promise<GetFlaggedEscrowsResult> => {
+  const page = Math.max(1, input.page ?? 1);
+  const limit = Math.min(100, Math.max(1, input.limit ?? 20));
+  // const skip = (page - 1) * limit;
 
-  if (escrow.status === nextStatus) {
-    throw ApiError.conflict(`This escrow has already been ${nextStatus}`);
-  }
+  // const filter = { status: EscrowStatus.EXPIRED };
 
-  if (escrow.status === 'released' || escrow.status === 'refunded') {
-    throw ApiError.conflict(
-      `This escrow is already settled (${escrow.status}) and cannot be modified`,
-    );
-  }
+  // const [escrows, total] = await Promise.all([
+  //   Escrow.find(filter).sort({ flaggedAt: -1 }).skip(skip).limit(limit),
+  //   Escrow.countDocuments(filter),
+  // ]);
 
-  await recordAction({
-    adminId: context.adminId,
-    action: nextStatus === 'released' ? 'escrow.released' : 'escrow.refunded',
-    targetType: 'Escrow',
-    targetId: escrow.id as string,
-    reason: context.reason,
-    ipAddress: context.ipAddress,
-    userAgent: context.userAgent,
-    changes: { status: { from: escrow.status, to: nextStatus } },
-  });
+  // return {
+  //   escrows,
+  //   total,
+  //   page,
+  //   limit,
+  //   totalPages: Math.ceil(total / limit) || 0,
+  // };
 
-  escrow.status = nextStatus;
-  await escrow.save();
-
-  return escrow.toJSON();
+  return {
+    escrows: [],
+    total: 0,
+    page,
+    limit,
+    totalPages: 0,
+  };
 };
 
-/** Refunds a held escrow back to the payer. */
-export const refundEscrow = (
-  escrowId: string,
-  context: AdminActionContext,
-): Promise<Record<string, unknown>> => settleEscrow(escrowId, 'refunded', context);
+/**
+ * Marks a flagged (expired) escrow as resolved by an administrator.
+ *
+ * Note: This function is commented out as the schema doesn't include resolved status
+ * fields in the current Escrow model.
+ */
+export const resolveEscrow = async (input: ResolveEscrowInput): Promise<IEscrow> => {
+  const { escrowId, adminId, notes } = input;
 
-/** Releases a held escrow to the payee. */
-export const releaseEscrow = (
-  escrowId: string,
-  context: AdminActionContext,
-): Promise<Record<string, unknown>> => settleEscrow(escrowId, 'released', context);
+  if (!mongoose.Types.ObjectId.isValid(escrowId)) {
+    throw new AppError('Invalid escrow ID format.', StatusCodes.BAD_REQUEST);
+  }
 
-export default { listEscrows, getEscrowById, refundEscrow, releaseEscrow };
+  const escrow = await Escrow.findById(escrowId);
+  if (!escrow) {
+    throw new AppError('Escrow not found.', StatusCodes.NOT_FOUND);
+  }
+
+  // Note: Commented out until status, resolvedAt, resolvedBy fields are added to model
+  // if (escrow.status !== EscrowStatus.EXPIRED) {
+  //   throw new AppError('Only escrows flagged as expired can be resolved.', StatusCodes.CONFLICT);
+  // }
+
+  // escrow.status = EscrowStatus.RESOLVED;
+  // escrow.resolvedAt = new Date();
+  // escrow.resolvedBy = adminId;
+  // escrow.resolutionNotes = notes;
+
+  // await escrow.save();
+
+  logger.info(`[EscrowMonitor] Admin ${adminId} attempted to resolve escrow ${escrowId}. Notes: "${notes}"`);
+  logger.warn('[EscrowMonitor] Resolve escrow feature not yet fully implemented');
+
+  return escrow;
+};

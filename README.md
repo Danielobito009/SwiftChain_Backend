@@ -124,33 +124,32 @@ The backend serves as the central hub connecting the frontend, database, and blo
 - `POST /shipments` - Create a shipment record.
 - `GET /shipments` - Get shipment details.
 
+### Escrow
+
+- `GET /api/v1/escrow/delivery/:id` - Fetch the escrow record (locking state, amount, asset,
+  contract id, on-chain transaction hashes) associated with a delivery. `:id` accepts either the
+  delivery `_id` or its business `deliveryId`.
+  
+### Transactions
+
+- `POST /api/v1/transactions/escrow-lock` - Build the unsigned, simulation-prepared Soroban XDR
+  that locks a delivery's escrow amount. Accepts `{ deliveryId, payerAddress }`; the amount and
+  contract target are resolved server-side from MongoDB and the deployment configuration. The
+  returned base64 envelope is signed and submitted by the client wallet — the backend never holds
+  secret keys.
+
 ### Uploads
 
 - `POST /uploads` - Upload proof of delivery or documents.
-
-### Audit Logs
-
-- `GET /audit-logs` - List administrative actions (admin only).
-- `GET /audit-logs/:targetType/:targetId` - Audit trail for a single record.
-
----
-
-## 📖 API Documentation
-
-Interactive OpenAPI 3.0 documentation is served by the running application:
-
-- **Swagger UI:** `http://localhost:3000/api-docs`
-- **Raw specification:** `http://localhost:3000/api-docs.json`
-
-Use `POST /api/v1/auth/login` to obtain a token, then click **Authorize** in
-Swagger UI to attach it to subsequent requests.
 
 ---
 
 ## 📄 Pagination, Sorting & Filtering
 
-Collection endpoints share a common query interface and return a `meta` block
-alongside the data:
+Collection endpoints can share a standardized query interface via the
+`buildQueryOptions` middleware in `src/middlewares/queryMiddleware.ts`, which
+parses and validates the query string once and hands the service layer a
+ready-to-use Mongoose filter, sort and page window.
 
 | Parameter | Description | Example |
 | --------- | ----------- | ------- |
@@ -166,46 +165,22 @@ Filters accept direct equality or the comparison operators `eq`, `ne`, `gt`,
 GET /api/v1/deliveries?status=pending&amount[gte]=100&sort=-amount&page=1&limit=20
 ```
 
+Each route declares the fields it exposes, so only whitelisted fields can be
+filtered or sorted on. `buildPaginationMeta` produces the accompanying
+metadata:
+
 ```json
 {
-  "status": "success",
-  "message": "Deliveries retrieved successfully",
-  "data": [],
-  "meta": {
-    "totalItems": 137,
-    "totalPages": 7,
-    "currentPage": 1,
-    "limit": 20,
-    "hasNextPage": true,
-    "hasPreviousPage": false,
-    "nextPage": 2,
-    "previousPage": null
-  }
+  "totalItems": 137,
+  "totalPages": 7,
+  "currentPage": 1,
+  "limit": 20,
+  "hasNextPage": true,
+  "hasPreviousPage": false,
+  "nextPage": 2,
+  "previousPage": null
 }
 ```
-
-Only fields a route explicitly whitelists may be filtered or sorted on;
-anything else is ignored or rejected.
-
----
-
-## 🛡 Rate Limiting
-
-Endpoints are protected against brute-force and abuse. Every response carries
-the standard `RateLimit-*` headers, and exceeding a limit returns `429` with a
-`Retry-After` header.
-
-| Scope | Default limit | Notes |
-| ----- | ------------- | ----- |
-| API-wide | 100 / 15 min | Baseline safety net. |
-| `POST /auth/login` | 5 / 15 min | Keyed by IP **and** targeted account. Successful logins are not counted. |
-| `POST /auth/register` | 10 / hour | Curbs automated signup abuse. |
-| Escrow endpoints | 30 / 15 min | Applies to the whole escrow router. |
-| Escrow refund / release | 10 / hour | Irreversible fund movement. |
-
-Every limit is configurable through the environment variables documented in
-`.env.example`. Behind a reverse proxy, set `TRUST_PROXY` to the number of
-hops so the real client IP is used rather than the proxy's.
 
 ---
 
@@ -336,10 +311,6 @@ Run the test suite using Jest:
 pnpm test
 ```
 
-Integration tests run against an in-memory MongoDB instance
-(`mongodb-memory-server`), so they exercise real Mongoose queries, indexes and
-validation rather than mocked data access. No local database is required.
-
 ---
 
 ## 🤝 Contribution
@@ -351,6 +322,8 @@ validation rather than mocked data access. No local database is required.
 5. Open a Pull Request.
 
 ---
+
+linked PR 5,4,6
 
 ## 📄 License
 

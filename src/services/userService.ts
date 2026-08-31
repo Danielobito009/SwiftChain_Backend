@@ -1,184 +1,296 @@
-import { Types } from 'mongoose';
-import User, { IUserDocument, UserRole, UserStatus } from '../models/User';
-import ApiError from '../utils/ApiError';
-import { PaginatedResult, QueryOptions } from '../types/query';
-import { buildPaginationMeta } from '../middlewares/queryMiddleware';
-import { RecordAuditInput, recordAction } from './auditLogService';
+import { StatusCodes } from 'http-status-codes';
+import mongoose from 'mongoose';
+import User from '../models/User';
+import DriverProfile from '../models/DriverProfile';
+import Delivery, { IDelivery } from '../models/Delivery';
+import { IUser, UserRole, UserStatus } from '../interfaces/IUser';
+import { AppError } from '../utils/AppError';
+import logger from '../config/logger';
 
-/** Context describing who performed a privileged action and from where. */
-export interface AdminActionContext {
-  adminId: string;
-  reason?: string;
-  ipAddress?: string;
-  userAgent?: string;
+// ─── DTOs ──────────────────────────────────────────────────────────────────────
+
+export interface UpdateUserInput {
+  firstName?: string;
+  lastName?: string;
+  role?: UserRole;
+  status?: UserStatus;
+  walletAddress?: string;
+  profilePicture?: string;
+  profilePictureKey?: string;
 }
 
-/** Loads a user by id, rejecting malformed ids before touching the database. */
-const findUserOrFail = async (userId: string): Promise<IUserDocument> => {
-  if (!Types.ObjectId.isValid(userId)) {
-    throw ApiError.badRequest('The supplied user id is not a valid identifier');
-  }
+export interface UpdatePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+}
 
-  const user = await User.findById(userId).exec();
-  if (!user) {
-    throw ApiError.notFound('User not found');
-  }
+export interface UserFilter {
+  role?: UserRole;
+  status?: UserStatus;
+  search?: string;
+  page?: number;
+  limit?: number;
+  includeDeleted?: boolean;
+}
 
-  return user;
-};
+export interface PaginatedUserResult {
+  data: IUser[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
 
-/**
- * Returns a page of users using the options produced by the query middleware.
- */
-export const listUsers = async (
-  options: QueryOptions,
-): Promise<PaginatedResult<Record<string, unknown>>> => {
-  const [items, totalItems] = await Promise.all([
-    User.find(options.filter)
-      .sort(options.sort)
-      .skip(options.skip)
-      .limit(options.limit)
-      .lean({ virtuals: true })
-      .exec(),
-    User.countDocuments(options.filter).exec(),
-  ]);
-
-  return {
-    items: items as unknown as Record<string, unknown>[],
-    meta: buildPaginationMeta(totalItems, options.page, options.limit),
+export interface SoftDeleteResult {
+  user: IUser;
+  cascaded: {
+    driverProfile: boolean;
+    deliveries: number;
   };
-};
+}
 
-/** Returns a single user by id. */
-export const getUserById = async (userId: string): Promise<Record<string, unknown>> => {
-  const user = await findUserOrFail(userId);
-  return user.toJSON();
-};
+// ─── Service ───────────────────────────────────────────────────────────────────
 
-/**
- * Applies a status change and writes the audit entry in the same step.
- *
- * The audit entry is written before the change is persisted: if the audit
- * write fails the action is abandoned, which guarantees no privileged change
- * ever lands without a corresponding record.
- */
-const applyAuditedChange = async <T>(
-  user: IUserDocument,
-  audit: Omit<RecordAuditInput, 'targetType' | 'targetId'>,
-  mutate: () => void,
-  project: (user: IUserDocument) => T,
-): Promise<T> => {
-  await recordAction({
-    ...audit,
-    targetType: 'User',
-    targetId: user.id as string,
-  });
+export class UserService {
+  /**
+   * Retrieve a single user by ID.
+   * By default, excludes soft-deleted users.
+   */
+  async getUserById(id: string): Promise<IUser> {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError('Invalid user ID format.', StatusCodes.BAD_REQUEST);
+    }
 
-  mutate();
-  await user.save();
+    const user = await User.findOne({ _id: id, isDeleted: { $ne: true } });
+    if (!user) {
+      throw new AppError('User not found.', StatusCodes.NOT_FOUND);
+    }
 
-  return project(user);
-};
-
-/** Suspends an account, blocking further authenticated access. */
-export const suspendUser = async (
-  userId: string,
-  context: AdminActionContext,
-): Promise<Record<string, unknown>> => {
-  const user = await findUserOrFail(userId);
-
-  if (user.id === context.adminId) {
-    throw ApiError.badRequest('Administrators cannot suspend their own account');
+    return user;
   }
 
-  if (user.status === 'suspended') {
-    throw ApiError.conflict('This user is already suspended');
+  /**
+   * List users with optional filtering and pagination.
+   */
+  async getUsers(filters: UserFilter): Promise<PaginatedUserResult> {
+    const {
+      role,
+      status,
+      search,
+      page = 1,
+      limit = 10,
+      includeDeleted = false,
+    } = filters;
+
+    const query: Record<string, unknown> = {};
+
+    if (!includeDeleted) {
+      query.isDeleted = { $ne: true };
+    }
+
+    if (role) {
+      query.role = role;
+    }
+
+    if (status) {
+      query.status = status;
+    }
+
+    if (search) {
+      query.$or = [
+        { email: { $regex: search, $options: 'i' } },
+        { firstName: { $regex: search, $options: 'i' } },
+        { lastName: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const skip = (page - 1) * limit;
+    const [data, total] = await Promise.all([
+      User.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
+      User.countDocuments(query).exec(),
+    ]);
+
+    return {
+      data: data as IUser[],
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 0,
+    };
   }
 
-  return applyAuditedChange(
-    user,
-    {
-      adminId: context.adminId,
-      action: 'user.suspended',
-      reason: context.reason,
-      ipAddress: context.ipAddress,
-      userAgent: context.userAgent,
-      changes: { status: { from: user.status, to: 'suspended' satisfies UserStatus } },
-    },
-    () => {
-      user.status = 'suspended';
-    },
-    (updated) => updated.toJSON(),
-  );
-};
+  /**
+   * Update user profile fields.
+   */
+  async updateUser(id: string, input: UpdateUserInput): Promise<IUser> {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError('Invalid user ID format.', StatusCodes.BAD_REQUEST);
+    }
 
-/** Restores a suspended account to active status. */
-export const reinstateUser = async (
-  userId: string,
-  context: AdminActionContext,
-): Promise<Record<string, unknown>> => {
-  const user = await findUserOrFail(userId);
+    const user = await User.findOneAndUpdate(
+      { _id: id, isDeleted: { $ne: true } },
+      { $set: input },
+      { new: true, runValidators: true },
+    );
 
-  if (user.status === 'active') {
-    throw ApiError.conflict('This user is already active');
+    if (!user) {
+      throw new AppError('User not found.', StatusCodes.NOT_FOUND);
+    }
+
+    logger.info(`User updated: ${user.email}`);
+    return user;
   }
 
-  return applyAuditedChange(
-    user,
-    {
-      adminId: context.adminId,
-      action: 'user.reinstated',
-      reason: context.reason,
-      ipAddress: context.ipAddress,
-      userAgent: context.userAgent,
-      changes: { status: { from: user.status, to: 'active' satisfies UserStatus } },
-    },
-    () => {
-      user.status = 'active';
-    },
-    (updated) => updated.toJSON(),
-  );
-};
+  /**
+   * Update user password. Requires the current password for verification.
+   */
+  async updatePassword(id: string, input: UpdatePasswordInput): Promise<IUser> {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError('Invalid user ID format.', StatusCodes.BAD_REQUEST);
+    }
 
-/** Changes a user's role, recording the previous and new value. */
-export const changeUserRole = async (
-  userId: string,
-  role: UserRole,
-  context: AdminActionContext,
-): Promise<Record<string, unknown>> => {
-  const user = await findUserOrFail(userId);
+    const user = await User.findOne({ _id: id, isDeleted: { $ne: true } }).select('+password');
+    if (!user) {
+      throw new AppError('User not found.', StatusCodes.NOT_FOUND);
+    }
 
-  if (user.role === role) {
-    throw ApiError.conflict(`This user already has the "${role}" role`);
+    const isCurrentPasswordValid = await user.comparePassword(input.currentPassword);
+    if (!isCurrentPasswordValid) {
+      throw new AppError('Current password is incorrect.', StatusCodes.UNAUTHORIZED);
+    }
+
+    user.password = input.newPassword;
+    await user.save();
+
+    logger.info(`Password updated for user: ${user.email}`);
+    return user;
   }
 
-  if (user.id === context.adminId) {
-    throw ApiError.badRequest('Administrators cannot change their own role');
+  /**
+   * Soft delete a user and cascade to related DriverProfile and Delivery records.
+   *
+   * Cascading rules:
+   *  - DriverProfile belonging to the user is soft-deleted.
+   *  - Deliveries where the user is driverId, userId, sender, or recipient are soft-deleted.
+   */
+  async softDeleteUser(id: string, userId?: string): Promise<SoftDeleteResult> {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError('Invalid user ID format.', StatusCodes.BAD_REQUEST);
+    }
+
+    const user = await User.findById(id);
+    if (!user) {
+      throw new AppError('User not found.', StatusCodes.NOT_FOUND);
+    }
+
+    if (user.isDeleted) {
+      throw new AppError('User is already deleted.', StatusCodes.CONFLICT);
+    }
+
+    let driverProfileDeleted = false;
+    let deliveriesDeleted = 0;
+
+    // Cascade: soft-delete driver profile
+    const driverProfile = await DriverProfile.findOne({ userId: id });
+    if (driverProfile) {
+      await (driverProfile as unknown as { softDelete(userId?: string): Promise<unknown> }).softDelete(userId);
+      driverProfileDeleted = true;
+    }
+
+    // Cascade: soft-delete related deliveries
+    const deliveryQuery: Record<string, unknown> = {
+      isDeleted: { $ne: true },
+      $or: [
+        { driverId: id },
+        { userId: id },
+        { sender: new mongoose.Types.ObjectId(id) },
+        { recipient: new mongoose.Types.ObjectId(id) },
+      ],
+    };
+
+    const deliveries = await Delivery.find(deliveryQuery).setOptions({ includeDeleted: true }).exec();
+    for (const delivery of deliveries) {
+      await (delivery as unknown as IDelivery).softDelete(userId);
+      deliveriesDeleted++;
+    }
+
+    // Soft-delete the user
+    await user.softDelete(userId);
+
+    logger.info(`User soft-deleted: ${user.email}. Cascaded to ${driverProfileDeleted ? 'driver profile, ' : ''}${deliveriesDeleted} deliveries.`);
+
+    return {
+      user,
+      cascaded: {
+        driverProfile: driverProfileDeleted,
+        deliveries: deliveriesDeleted,
+      },
+    };
   }
 
-  const previousRole = user.role;
+  /**
+   * Restore a soft-deleted user.
+   * Note: Related DriverProfile and Deliveries are NOT automatically restored
+   * to avoid inconsistent state — they must be restored individually if needed.
+   */
+  async restoreUser(id: string): Promise<IUser> {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError('Invalid user ID format.', StatusCodes.BAD_REQUEST);
+    }
 
-  return applyAuditedChange(
-    user,
-    {
-      adminId: context.adminId,
-      action: 'user.role_changed',
-      reason: context.reason,
-      ipAddress: context.ipAddress,
-      userAgent: context.userAgent,
-      changes: { role: { from: previousRole, to: role } },
-    },
-    () => {
-      user.role = role;
-    },
-    (updated) => updated.toJSON(),
-  );
-};
+    const user = await User.findById(id);
+    if (!user) {
+      throw new AppError('User not found.', StatusCodes.NOT_FOUND);
+    }
 
-export default {
-  listUsers,
-  getUserById,
-  suspendUser,
-  reinstateUser,
-  changeUserRole,
-};
+    if (!user.isDeleted) {
+      throw new AppError('User is not deleted.', StatusCodes.CONFLICT);
+    }
+
+    await user.restore();
+
+    logger.info(`User restored: ${user.email}`);
+    return user;
+  }
+
+  /**
+   * List soft-deleted users.
+   */
+  async getDeletedUsers(filters: Omit<UserFilter, 'includeDeleted'>): Promise<PaginatedUserResult> {
+    const { page = 1, limit = 10, ...rest } = filters;
+
+    const query: Record<string, unknown> = { isDeleted: true };
+
+    if (rest.role) {
+      query.role = rest.role;
+    }
+
+    if (rest.status) {
+      query.status = rest.status;
+    }
+
+    if (rest.search) {
+      query.$or = [
+        { email: { $regex: rest.search, $options: 'i' } },
+        { firstName: { $regex: rest.search, $options: 'i' } },
+        { lastName: { $regex: rest.search, $options: 'i' } },
+      ];
+    }
+
+    const skip = (page - 1) * limit;
+    const [data, total] = await Promise.all([
+      User.find(query).sort({ deletedAt: -1 }).skip(skip).limit(limit).exec(),
+      User.countDocuments(query).exec(),
+    ]);
+
+    return {
+      data: data as IUser[],
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 0,
+    };
+  }
+}
+
+export const userService = new UserService();

@@ -5,6 +5,7 @@ coverage
 .DS_Store
 *.log
 logs
+uploads
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -22,3 +23,7 @@ scripts/initialize/create-swift-smart-contract-issues.py
 #Context
 .contextSwiftFrontend
 .contextSwiftSmartContract
+
+# Stryker Mutation Testing
+.stryker-tmp
+reports/

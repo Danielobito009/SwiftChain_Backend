@@ -1,66 +1,93 @@
 import { Router } from 'express';
-import { getUser, getUsers, reinstate, suspend, updateRole } from '../controllers/userController';
-import { authenticate, authorize } from '../middlewares/auth';
-import { buildQueryOptions } from '../middlewares/queryMiddleware';
-import { QueryFeatureConfig } from '../types/query';
+import userController from '../controllers/userController';
+import { authMiddleware } from '../middlewares/authMiddleware';
+import requireRole from '../middleware/requireRole';
+import { validateRequest } from '../middlewares/validateRequest';
+import { updateWalletSchema } from '../validators/userValidator';
+import { UserRole } from '../interfaces/IUser';
 
 const router = Router();
 
 /**
- * Query surface exposed by the users collection.
- *
- * Only these fields may be filtered, sorted or searched on, which keeps
- * unindexed and sensitive fields out of client-controlled queries.
+ * @route   PUT /api/v1/users/wallet
+ * @desc    Link or update the authenticated user's Stellar wallet address
+ * @access  Private
  */
-const userQueryConfig: QueryFeatureConfig = {
-  sortableFields: ['createdAt', 'updatedAt', 'name', 'email', 'role', 'status'],
-  filterableFields: {
-    role: 'string',
-    status: 'string',
-    createdAt: 'date',
-  },
-  searchableFields: ['name', 'email'],
-  defaultSort: { createdAt: -1 },
-  defaultLimit: 20,
-  maxLimit: 100,
-};
-
-// Every user route requires authentication.
-router.use(authenticate);
+router.put(
+  '/wallet',
+  authMiddleware,
+  validateRequest({ body: updateWalletSchema }),
+  userController.updateWallet,
+);
 
 /**
- * @route   GET /api/v1/users
- * @desc    List users with pagination, sorting and filtering
- * @access  Admin
+ * @route   GET /api/v1/users/deleted
+ * @desc    List soft-deleted users
+ * @access  Private (Admin only)
  */
-router.get('/', authorize('admin'), buildQueryOptions(userQueryConfig), getUsers);
+router.get(
+  '/deleted',
+  authMiddleware,
+  requireRole(UserRole.ADMIN),
+  userController.listDeletedUsers,
+);
 
 /**
- * @route   GET /api/v1/users/:userId
- * @desc    Retrieve a single user
- * @access  Admin
+ * @route   GET /api/v1/users/:id
+ * @desc    Get user by ID
+ * @access  Private
  */
-router.get('/:userId', authorize('admin'), getUser);
+router.get(
+  '/:id',
+  authMiddleware,
+  userController.getUserById,
+);
 
 /**
- * @route   PATCH /api/v1/users/:userId/suspend
- * @desc    Suspend a user account (audited)
- * @access  Admin
+ * @route   PUT /api/v1/users/:id
+ * @desc    Update user profile
+ * @access  Private (Admin only)
  */
-router.patch('/:userId/suspend', authorize('admin'), suspend);
+router.put(
+  '/:id',
+  authMiddleware,
+  requireRole(UserRole.ADMIN),
+  userController.updateUser,
+);
 
 /**
- * @route   PATCH /api/v1/users/:userId/reinstate
- * @desc    Reinstate a suspended user account (audited)
- * @access  Admin
+ * @route   DELETE /api/v1/users/:id
+ * @desc    Soft delete user with cascading to related records
+ * @access  Private (Admin only)
  */
-router.patch('/:userId/reinstate', authorize('admin'), reinstate);
+router.delete(
+  '/:id',
+  authMiddleware,
+  requireRole(UserRole.ADMIN),
+  userController.deleteUser,
+);
 
 /**
- * @route   PATCH /api/v1/users/:userId/role
- * @desc    Change a user's role (audited)
- * @access  Admin
+ * @route   POST /api/v1/users/:id/restore
+ * @desc    Restore a soft-deleted user
+ * @access  Private (Admin only)
  */
-router.patch('/:userId/role', authorize('admin'), updateRole);
+router.post(
+  '/:id/restore',
+  authMiddleware,
+  requireRole(UserRole.ADMIN),
+  userController.restoreUser,
+);
+
+/**
+ * @route   PUT /api/v1/users/:id/password
+ * @desc    Update user password
+ * @access  Private (own user only)
+ */
+router.put(
+  '/:id/password',
+  authMiddleware,
+  userController.updatePassword,
+);
 
 export default router;

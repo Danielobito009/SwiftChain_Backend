@@ -1,40 +1,29 @@
+import type { Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
-import { loginUser, registerUser } from '../services/authService';
-import { validateLoginInput, validateRegisterInput } from '../validators/authValidator';
+import authService from '../services/authService';
+import { validateRegisterInput } from '../validators/authValidator';
 import asyncHandler from '../utils/asyncHandler';
+import { sendSuccess } from '../utils/responseWrapper';
+import type { ILoginPayload } from '../interfaces/IUser';
 
-/**
- * POST /api/v1/auth/register
- *
- * Registers a new user and returns an access token. Protected by the
- * registration rate limiter.
- */
-export const register = asyncHandler(async (req, res) => {
-  const input = validateRegisterInput(req.body);
-  const result = await registerUser(input);
+class AuthController {
+  public login = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const loginPayload: ILoginPayload = {
+      email: req.body.email,
+      password: req.body.password,
+    };
 
-  res.status(StatusCodes.CREATED).json({
-    status: 'success',
-    message: 'User registered successfully',
-    data: result,
+    const result = await authService.login(loginPayload);
+
+    sendSuccess(res, result, 'Login successful', StatusCodes.OK);
   });
-});
 
-/**
- * POST /api/v1/auth/login
- *
- * Authenticates a set of credentials. Protected by the strict auth rate
- * limiter, which throttles failed attempts per IP and per targeted account.
- */
-export const login = asyncHandler(async (req, res) => {
-  const input = validateLoginInput(req.body);
-  const result = await loginUser(input);
+  public register = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const input = validateRegisterInput(req.body);
+    const user = await authService.registerUser(input);
 
-  res.status(StatusCodes.OK).json({
-    status: 'success',
-    message: 'Logged in successfully',
-    data: result,
+    sendSuccess(res, { user }, 'User registered successfully', StatusCodes.CREATED);
   });
-});
+}
 
-export default { register, login };
+export default new AuthController();
