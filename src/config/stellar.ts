@@ -1,10 +1,11 @@
-import { rpc as StellarRpc, BASE_FEE, Networks, StrKey } from '@stellar/stellar-sdk';
+import { rpc as StellarRpc, Networks, StrKey } from '@stellar/stellar-sdk';
 import logger from './logger';
+import env from './env';
 
 /**
  * Supported Stellar network aliases.
  */
-export type StellarNetwork = 'mainnet' | 'testnet' | 'futurenet';
+export type StellarNetwork = typeof env.STELLAR_NETWORK;
 
 /**
  * Resolved Stellar configuration derived from environment variables.
@@ -53,33 +54,13 @@ const DEFAULT_RPC_URLS: Record<StellarNetwork, string> = {
  * defaults. Validated at startup so misconfiguration fails fast.
  */
 function resolveStellarConfig(): StellarConfig {
-  const network = (process.env.STELLAR_NETWORK?.toLowerCase() ?? 'testnet') as StellarNetwork;
+  const network = env.STELLAR_NETWORK;
 
-  if (!['mainnet', 'testnet', 'futurenet'].includes(network)) {
-    throw new Error(
-      `Invalid STELLAR_NETWORK="${process.env.STELLAR_NETWORK}". ` +
-        'Must be one of: mainnet | testnet | futurenet',
-    );
-  }
-
-  const rpcUrl = process.env.SOROBAN_RPC_URL?.trim() || DEFAULT_RPC_URLS[network];
-
-  // Prefer explicit passphrase env var; fall back to the well-known value for
-  // the configured network.
-  const networkPassphrase =
-    process.env.STELLAR_NETWORK_PASSPHRASE?.trim() || NETWORK_PASSPHRASES[network];
-
-  const timeoutMs = parseInt(process.env.SOROBAN_RPC_TIMEOUT_MS ?? '10000', 10);
-
-  if (!rpcUrl) {
-    throw new Error('SOROBAN_RPC_URL is required and could not be resolved.');
-  }
-
-  if (!networkPassphrase) {
-    throw new Error('STELLAR_NETWORK_PASSPHRASE is required and could not be resolved.');
-  }
-
-  const escrowContractId = process.env.SOROBAN_ESCROW_CONTRACT_ID?.trim() || undefined;
+  // Blank values fall back to the well-known endpoint/passphrase for the
+  // selected network, so only non-default deployments need to set them.
+  const rpcUrl = env.SOROBAN_RPC_URL || DEFAULT_RPC_URLS[network];
+  const networkPassphrase = env.STELLAR_NETWORK_PASSPHRASE || NETWORK_PASSPHRASES[network];
+  const escrowContractId = env.SOROBAN_ESCROW_CONTRACT_ID || undefined;
 
   if (escrowContractId && !StrKey.isValidContract(escrowContractId)) {
     throw new Error(
@@ -88,28 +69,15 @@ function resolveStellarConfig(): StellarConfig {
     );
   }
 
-  const escrowLockFunction = process.env.SOROBAN_ESCROW_LOCK_FUNCTION?.trim() || 'lock_escrow';
-  const baseFee = process.env.STELLAR_BASE_FEE?.trim() || BASE_FEE;
-  const transactionTimeoutSeconds = parseInt(
-    process.env.STELLAR_TRANSACTION_TIMEOUT_SECONDS ?? '300',
-    10,
-  );
-
-  if (!Number.isInteger(transactionTimeoutSeconds) || transactionTimeoutSeconds <= 0) {
-    throw new Error(
-      'STELLAR_TRANSACTION_TIMEOUT_SECONDS must be a positive integer number of seconds.',
-    );
-  }
-
   return {
     rpcUrl,
     networkPassphrase,
     network,
-    timeoutMs,
+    timeoutMs: env.SOROBAN_RPC_TIMEOUT_MS,
     escrowContractId,
-    escrowLockFunction,
-    baseFee,
-    transactionTimeoutSeconds,
+    escrowLockFunction: env.SOROBAN_ESCROW_LOCK_FUNCTION,
+    baseFee: env.STELLAR_BASE_FEE,
+    transactionTimeoutSeconds: env.STELLAR_TRANSACTION_TIMEOUT_SECONDS,
   };
 }
 

@@ -15,6 +15,7 @@ import {
   TypedSocket,
 } from './socket.types';
 import jwt from 'jsonwebtoken';
+import env from '../config/env';
 
 /**
  * Typed Socket.IO server alias used throughout the sockets layer.
@@ -42,15 +43,15 @@ export type TypedServer = SocketIOServer<
 export function initializeSocketServer(httpServer: HttpServer): TypedServer {
   const io: TypedServer = new SocketIOServer(httpServer, {
     cors: {
-      origin: process.env.CORS_ORIGIN || '*',
+      origin: env.CORS_ORIGIN,
       methods: ['GET', 'POST'],
       credentials: true,
     },
     // Use Socket.IO's built-in transport-level ping/pong as a fallback
-    pingTimeout: parseInt(process.env.SOCKET_PING_TIMEOUT_MS ?? '20000', 10),
-    pingInterval: parseInt(process.env.SOCKET_PING_INTERVAL_MS ?? '25000', 10),
+    pingTimeout: env.SOCKET_PING_TIMEOUT_MS,
+    pingInterval: env.SOCKET_PING_INTERVAL_MS,
     // Allow only websocket transport in production for efficiency
-    transports: process.env.NODE_ENV === 'production' ? ['websocket'] : ['websocket', 'polling'],
+    transports: env.NODE_ENV === 'production' ? ['websocket'] : ['websocket', 'polling'],
   });
 
   // ─── Per-connection setup ──────────────────────────────────────────────────
@@ -86,7 +87,7 @@ export function initializeSocketServer(httpServer: HttpServer): TypedServer {
       }
       try {
         const rawToken = token.startsWith('Bearer ') ? token.slice(7) : token;
-        const decoded = jwt.verify(rawToken, process.env.JWT_SECRET as string) as { userId?: string; exp?: number };
+        const decoded = jwt.verify(rawToken, env.JWT_SECRET) as { userId?: string; exp?: number };
         const newExp = typeof decoded.exp === 'number' ? decoded.exp * 1000 : undefined;
         if (newExp) {
           (socket.data as any).tokenExp = newExp;
@@ -209,7 +210,7 @@ function extractAuthInfo(socket: TypedSocket): { userId?: string; tokenExp?: num
 
   try {
     const rawToken = token.startsWith('Bearer ') ? token.slice(7) : token;
-    const decoded = jwt.verify(rawToken, process.env.JWT_SECRET as string) as { userId?: string; exp?: number };
+    const decoded = jwt.verify(rawToken, env.JWT_SECRET) as { userId?: string; exp?: number };
     return {
       userId: typeof decoded.userId === 'string' ? decoded.userId : undefined,
       tokenExp: typeof decoded.exp === 'number' ? decoded.exp * 1000 : undefined,

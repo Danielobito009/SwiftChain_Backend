@@ -11,10 +11,11 @@ import {
 import { startEscrowMonitorJob, stopEscrowMonitorJob } from './jobs/escrowMonitor';
 import { startEventPoller, stopEventPoller } from './services/eventPoller';
 import { initializeRedis, disconnectRedis } from './config/redis';
+import env from './config/env';
 
 dotenv.config();
 
-const PORT = process.env.PORT || 8000;
+const PORT = env.PORT;
 
 const httpServer = http.createServer(app);
 const io: TypedServer = initializeSocketServer(httpServer);
@@ -28,7 +29,7 @@ const initializeServices = async (): Promise<void> => {
     logger.error('❌ Failed to connect to Redis:', error);
     logger.warn('⚠️ Distributed locking will not be available');
     // Continue without Redis in non-production environments
-    if (process.env.NODE_ENV === 'production') {
+    if (env.NODE_ENV === 'production') {
       process.exit(1);
     }
   }
@@ -36,7 +37,7 @@ const initializeServices = async (): Promise<void> => {
 
 httpServer.listen(PORT, () => {
   logger.info(
-    `🚀 Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`
+    `🚀 Server running on port ${PORT} in ${env.NODE_ENV} mode`
   );
   logger.info(`📝 Health check: http://localhost:${PORT}/health`);
   logger.info(`📦 ETA endpoint: http://localhost:${PORT}/api/v1/deliveries/:id/eta`);
@@ -49,7 +50,7 @@ httpServer.listen(PORT, () => {
   startIndexerLagMonitor();
 });
 
-if (process.env.NODE_ENV !== 'test') {
+if (env.NODE_ENV !== 'test') {
   startEscrowMonitorJob();
   startEventPoller();
 }

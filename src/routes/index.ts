@@ -12,6 +12,9 @@ import profileRoutes from './profileRoutes';
 import healthRoutes from './healthRoutes';
 import userRoutes from './userRoutes';
 import socketMetricsRoutes from './socketMetricsRoutes';
+import bulkDeliveryRoutes from './bulkDeliveryRoutes';
+import notificationRoutes from './notificationRoutes';
+import stellarRoutes from './stellar.routes';
 
 const router = Router();
 
@@ -32,5 +35,6 @@ router.use('/v1/notifications', notificationRoutes);
 router.use('/v1/health', healthRoutes);
 router.use('/v1/socket-metrics', socketMetricsRoutes);
 router.use('/v1/users', userRoutes);
+router.use('/v1/stellar', stellarRoutes);
 
 export default router;
