@@ -2,6 +2,7 @@ import type { CorsOptions, CorsOptionsDelegate } from 'cors';
 import type { HelmetOptions } from 'helmet';
 import type { Request } from 'express';
 import logger from './logger';
+import env from './env';
 
 /**
  * Error raised when a request originates from a disallowed origin.
@@ -24,7 +25,7 @@ export class CorsNotAllowedError extends Error {
  * Example: `CORS_ORIGIN=http://localhost:3000,https://app.swiftchain.io`
  */
 export const getAllowedOrigins = (): string[] =>
-  (process.env.CORS_ORIGIN ?? '')
+  env.CORS_ORIGIN
     .split(',')
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0);

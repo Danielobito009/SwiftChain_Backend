@@ -106,6 +106,23 @@ export class DeliveryRepository extends BaseRepository<IDelivery> {
   }
 
   /**
+   * Apply a status change reported by an on-chain `delivery_status_updated` event.
+   *
+   * The event announces a new authoritative status for a delivery identified by
+   * its tracking number. This updates the database directly, bypassing the normal
+   * state-machine guards in {@link transitionStatus} because the chain is the
+   * source of truth.
+   */
+  async updateStatusByTrackingNumber(
+    trackingNumber: string,
+    status: DeliveryStatus,
+    options?: WriteOptions,
+  ): Promise<IDelivery | null> {
+    if (!trackingNumber.trim()) return null;
+    return this.updateOne({ trackingNumber }, { $set: { status } }, options);
+  }
+
+  /**
    * Atomically move a delivery from one status to another.
    *
    * The expected current status is part of the filter, so two concurrent

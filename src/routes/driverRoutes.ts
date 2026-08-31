@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { driverController } from '../controllers/driverController';
+import { driverLocationController } from '../controllers/driverLocationController';
 import authenticate from '../middleware/authenticate';
 import requireRole from '../middleware/requireRole';
 import { UserRole } from '../interfaces/IUser';
@@ -23,6 +24,52 @@ router.patch(
   authenticate,
   requireRole(UserRole.DRIVER),
   driverController.setVehicleDetails.bind(driverController),
+);
+
+/**
+ * @route  GET /api/v1/drivers/nearby
+ * @desc   Find drivers near a coordinate, nearest first, using the 2dsphere index
+ * @access Authenticated
+ */
+router.get(
+  '/nearby',
+  authenticate,
+  driverLocationController.getNearbyDrivers.bind(driverLocationController),
+);
+
+/**
+ * @route  GET /api/v1/drivers/nearby/explain
+ * @desc   Report the query plan and index used by the proximity search
+ * @access Admin only
+ */
+router.get(
+  '/nearby/explain',
+  authenticate,
+  requireRole(UserRole.ADMIN),
+  driverLocationController.explainNearbyQuery.bind(driverLocationController),
+);
+
+/**
+ * @route  PUT /api/v1/drivers/me/location
+ * @desc   Record the authenticated driver's current position
+ * @access Driver only
+ */
+router.put(
+  '/me/location',
+  authenticate,
+  requireRole(UserRole.DRIVER),
+  driverLocationController.updateMyLocation.bind(driverLocationController),
+);
+
+/**
+ * @route  GET /api/v1/drivers/:driverId/location
+ * @desc   Fetch a single driver's most recent position
+ * @access Authenticated
+ */
+router.get(
+  '/:driverId/location',
+  authenticate,
+  driverLocationController.getDriverLocation.bind(driverLocationController),
 );
 
 export default router;

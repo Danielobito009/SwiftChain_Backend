@@ -1,19 +1,21 @@
 import { Types } from 'mongoose';
 import logger from '../config/logger';
 import { LocationUpdate, ILocationUpdate } from '../models/LocationUpdate';
+import { toUTC, nowUTC } from '../utils/dateUtils';
 import {
   LocationSyncPayload,
   OfflineLocationPoint,
   LocationSyncAck,
   SyncItemResult,
 } from './socket.types';
+import env from '../config/env';
 
 /**
  * Maximum number of location points accepted in a single sync batch.
  * Protects against abusive or runaway clients.
  * Overridable via SYNC_BATCH_SIZE_LIMIT env var.
  */
-const BATCH_SIZE_LIMIT = parseInt(process.env.SYNC_BATCH_SIZE_LIMIT ?? '500', 10);
+const BATCH_SIZE_LIMIT = env.SYNC_BATCH_SIZE_LIMIT;
 
 /**
  * SyncService handles the business logic for offline catch-up sync:
@@ -41,7 +43,7 @@ export class SyncService {
     driverId: string,
     payload: LocationSyncPayload,
   ): Promise<LocationSyncAck> {
-    const processedAt = new Date().toISOString();
+    const processedAt = nowUTC().toISOString();
 
     // ── 1. Validate driverId ─────────────────────────────────────────────────
     if (!Types.ObjectId.isValid(driverId)) {
@@ -86,7 +88,7 @@ export class SyncService {
     }
 
     // ── 4. Fetch existing capturedAt values for this driver to detect dupes ──
-    const capturedAtDates = validPoints.map((p) => new Date(p.capturedAt));
+    const capturedAtDates = validPoints.map((p) => toUTC(p.capturedAt));
 
     const existingDocs = await LocationUpdate.find(
       {
@@ -96,7 +98,7 @@ export class SyncService {
       { capturedAt: 1 },
     ).lean<Pick<ILocationUpdate, 'capturedAt'>[]>();
 
-    const existingSet = new Set<number>(existingDocs.map((d) => new Date(d.capturedAt).getTime()));
+    const existingSet = new Set<number>(existingDocs.map((d) => toUTC(d.capturedAt).getTime()));
 
     // ── 5. Build insertable documents, deduplicating within batch ─────────────
     const seenInBatch = new Set<number>();
@@ -116,7 +118,7 @@ export class SyncService {
         driverId: driverObjectId,
         deliveryId: point.deliveryId ? new Types.ObjectId(point.deliveryId) : undefined,
         coordinates: { lat: point.lat, lng: point.lng },
-        capturedAt: new Date(ts),
+        capturedAt: toUTC(ts),
         isOfflineSync: true,
         status: 'pending',
       });
