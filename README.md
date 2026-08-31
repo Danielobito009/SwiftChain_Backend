@@ -124,6 +124,20 @@ The backend serves as the central hub connecting the frontend, database, and blo
 - `POST /shipments` - Create a shipment record.
 - `GET /shipments` - Get shipment details.
 
+### Escrow
+
+- `GET /api/v1/escrow/delivery/:id` - Fetch the escrow record (locking state, amount, asset,
+  contract id, on-chain transaction hashes) associated with a delivery. `:id` accepts either the
+  delivery `_id` or its business `deliveryId`.
+  
+### Transactions
+
+- `POST /api/v1/transactions/escrow-lock` - Build the unsigned, simulation-prepared Soroban XDR
+  that locks a delivery's escrow amount. Accepts `{ deliveryId, payerAddress }`; the amount and
+  contract target are resolved server-side from MongoDB and the deployment configuration. The
+  returned base64 envelope is signed and submitted by the client wallet — the backend never holds
+  secret keys.
+
 ### Uploads
 
 - `POST /uploads` - Upload proof of delivery or documents.
@@ -268,6 +282,8 @@ pnpm test
 5. Open a Pull Request.
 
 ---
+
+linked PR 5,4,6
 
 ## 📄 License
 

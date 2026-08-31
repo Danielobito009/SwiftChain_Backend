@@ -1,45 +1,74 @@
+import http from 'http';
+import dotenv from 'dotenv';
 import app from './app';
 import logger from './config/logger';
+import { startIndexerLagMonitor } from './services/monitorService';
+import {
+  initializeSocketServer,
+  shutdownSocketServer,
+  TypedServer,
+} from './sockets/connectionHandler';
+import { startEscrowMonitorJob, stopEscrowMonitorJob } from './jobs/escrowMonitor';
+import { startEventPoller, stopEventPoller } from './services/eventPoller';
+import { initializeRedis, disconnectRedis } from './config/redis';
 
-const PORT = process.env.PORT || 3000;
+dotenv.config();
 
-const server = app.listen(PORT, () => {
-  logger.info(`🚀 Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);
+const PORT = process.env.PORT || 8000;
+
+const httpServer = http.createServer(app);
+const io: TypedServer = initializeSocketServer(httpServer);
+
+// Initialize Redis connection for distributed locking
+const initializeServices = async (): Promise<void> => {
+  try {
+    await initializeRedis();
+    logger.info('✅ Redis connected successfully');
+  } catch (error) {
+    logger.error('❌ Failed to connect to Redis:', error);
+    logger.warn('⚠️ Distributed locking will not be available');
+    // Continue without Redis in non-production environments
+    if (process.env.NODE_ENV === 'production') {
+      process.exit(1);
+    }
+  }
+};
+
+httpServer.listen(PORT, () => {
+  logger.info(
+    `🚀 Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`
+  );
   logger.info(`📝 Health check: http://localhost:${PORT}/health`);
+  logger.info(`📦 ETA endpoint: http://localhost:${PORT}/api/v1/deliveries/:id/eta`);
+
+  // Initialize Redis and other services
+  initializeServices().catch((error) =>
+    logger.error('Error initializing services:', error)
+  );
+
+  startIndexerLagMonitor();
 });
 
-// Graceful shutdown
+if (process.env.NODE_ENV !== 'test') {
+  startEscrowMonitorJob();
+  startEventPoller();
+}
+
 const gracefulShutdown = (): void => {
-  logger.info('Received shutdown signal, closing gracefully...');
+  logger.info('Shutting down gracefully...');
+  stopEventPoller();
+  stopEscrowMonitorJob();
+  
+  // Disconnect Redis
+  disconnectRedis()
+    .catch((error) => logger.error('Error disconnecting Redis:', error));
 
-  server.close(() => {
-    logger.info('HTTP server closed');
-    import('mongoose').then(({ default: mongoose }) => {
-      mongoose.connection.close(false).then(() => {
-        logger.info('MongoDB connection closed');
-        process.exit(0);
-      });
-    });
-  });
-
-  // Force close after 10 seconds
-  setTimeout(() => {
-    logger.error('Could not close connections in time, forcefully shutting down');
-    process.exit(1);
-  }, 10000);
+  shutdownSocketServer(io)
+    .catch((error) =>
+      logger.error('Error shutting down Socket.IO server:', error)
+    )
+    .finally(() => process.exit(0));
 };
 
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
-
-process.on('unhandledRejection', (error: Error) => {
-  logger.error('Unhandled Rejection:', error);
-  gracefulShutdown();
-});
-
-process.on('uncaughtException', (error: Error) => {
-  logger.error('Uncaught Exception:', error);
-  gracefulShutdown();
-});
-
-export default server;

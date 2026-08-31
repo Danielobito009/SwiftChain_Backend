@@ -1,47 +1,65 @@
-import mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Schema, Document } from 'mongoose';
 
-export interface IDisputeHistoryEntry {
-  actor: mongoose.Types.ObjectId | null;
-  action: string;
-  notes?: string;
-  timestamp: Date;
+export enum DisputeReason {
+  DAMAGED_PACKAGE = 'damaged_package',
+  LATE_DELIVERY = 'late_delivery',
+  WRONG_ITEM = 'wrong_item',
+  NON_DELIVERY = 'non_delivery',
+  OTHER = 'other',
+}
+
+export enum DisputeStatus {
+  OPEN = 'open',
+  UNDER_REVIEW = 'under_review',
+  RESOLVED = 'resolved',
+  REJECTED = 'rejected',
 }
 
 export interface IDispute extends Document {
-  escrow: mongoose.Types.ObjectId;
-  reason: string;
-  status: 'open' | 'locked' | 'resolved' | 'closed';
-  createdBy?: mongoose.Types.ObjectId;
-  lockedAt?: Date | null;
-  resolvedAt?: Date | null;
-  resolution?: 'refund' | 'release' | null;
-  history: IDisputeHistoryEntry[];
+  deliveryId: string;
+  raisedBy: string;
+  reason: DisputeReason;
+  description: string;
+  evidenceUrls: string[];
+  status: DisputeStatus;
+  raisedAtLedger?: number;
+  resolvedAt?: Date;
+  resolvedBy?: string;
+  resolutionNotes?: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
-const DisputeHistorySchema: Schema = new Schema(
+const DisputeSchema = new Schema<IDispute>(
   {
-    actor: { type: Schema.Types.ObjectId, ref: 'User', default: null },
-    action: { type: String, required: true },
-    notes: { type: String },
-    timestamp: { type: Date, default: Date.now },
-  },
-  { _id: false },
-);
-
-const DisputeSchema: Schema = new Schema(
-  {
-    escrow: { type: Schema.Types.ObjectId, ref: 'Escrow', required: true },
-    reason: { type: String, required: true },
-    status: { type: String, default: 'open' },
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
-    lockedAt: { type: Date, default: null },
-    resolvedAt: { type: Date, default: null },
-    resolution: { type: String, enum: ['refund', 'release'], default: null },
-    history: { type: [DisputeHistorySchema], default: [] },
+    deliveryId: { type: String, required: true, index: true },
+    raisedBy: { type: String, required: true, index: true },
+    reason: {
+      type: String,
+      enum: Object.values(DisputeReason),
+      required: true,
+    },
+    description: { type: String, required: true },
+    evidenceUrls: { type: [String], default: () => [] },
+    status: {
+      type: String,
+      enum: Object.values(DisputeStatus),
+      default: DisputeStatus.OPEN,
+      index: true,
+    },
+    raisedAtLedger: { type: Number },
+    resolvedAt: { type: Date },
+    resolvedBy: { type: String },
+    resolutionNotes: { type: String },
   },
   { timestamps: true },
 );
 
-export default mongoose.model<IDispute>('Dispute', DisputeSchema);
+DisputeSchema.index({ deliveryId: 1, status: 1 });
+DisputeSchema.index({ raisedBy: 1, createdAt: -1 });
+DisputeSchema.index({ status: 1, createdAt: -1 });
+
+const Dispute = mongoose.model<IDispute>('Dispute', DisputeSchema);
+
+export default Dispute;
+export { Dispute };

@@ -1,111 +1,244 @@
-import Escrow, { IEscrow } from '../models/Escrow';
-import Dispute, { IDispute } from '../models/Dispute';
-import AuditLog from '../models/AuditLog';
+import { StatusCodes } from 'http-status-codes';
 import mongoose from 'mongoose';
+import Dispute, { DisputeReason, DisputeStatus, IDispute } from '../models/Dispute';
+import Delivery, { DeliveryStatus } from '../models/Delivery';
+import { sorobanService } from '../blockchain/soroban.service';
+import AppError from '../utils/AppError';
+import logger from '../config/logger';
+import type {
+  CreateDisputeInput,
+  ResolveDisputeInput,
+  AddEvidenceInput,
+  UpdateDisputeInput,
+  DisputeFilter,
+} from '../validators/disputeValidator';
 
-class DisputeService {
-  public async lockEscrow(escrowId: string, adminId: string, reason: string): Promise<IDispute> {
-    if (!mongoose.Types.ObjectId.isValid(escrowId)) {
-      throw new Error('Invalid escrow id');
-    }
+const ACTIVE_DELIVERY_STATUSES: DeliveryStatus[] = [
+  DeliveryStatus.ASSIGNED,
+  DeliveryStatus.IN_PROGRESS,
+];
 
-    const escrow = await Escrow.findById(escrowId);
-    if (!escrow) {
-      throw new Error('Escrow not found');
-    }
+const populateOptions = [
+  { path: 'raisedBy', select: 'firstName lastName email' },
+  { path: 'deliveryId', select: 'deliveryId status userId driverId' },
+];
 
-    if (escrow.locked) {
-      throw new Error('Escrow already locked');
-    }
+export const createDispute = async (input: CreateDisputeInput): Promise<IDispute> => {
+  const { deliveryId, raisedBy, reason, description, evidenceUrls } = input;
 
-    // Mark escrow as locked
-    escrow.locked = true;
-    escrow.status = 'locked';
-    await escrow.save();
-
-    // Create dispute record
-    const dispute = await Dispute.create({
-      escrow: escrow._id,
-      reason,
-      status: 'locked',
-      createdBy: adminId ? new mongoose.Types.ObjectId(adminId) : undefined,
-      lockedAt: new Date(),
-      history: [
-        {
-          actor: adminId ? new mongoose.Types.ObjectId(adminId) : null,
-          action: 'locked_escrow',
-          notes: reason,
-          timestamp: new Date(),
-        },
-      ],
-    });
-
-    // Audit log
-    await AuditLog.create({
-      action: 'escrow_locked',
-      actor: adminId ? new mongoose.Types.ObjectId(adminId) : null,
-      targetType: 'Escrow',
-      targetId: escrow._id,
-      description: `Escrow ${escrow._id} locked due to dispute: ${reason}`,
-      meta: { disputeId: dispute._id.toString() },
-    });
-
-    return dispute;
+  if (!mongoose.Types.ObjectId.isValid(deliveryId)) {
+    throw new AppError('Invalid delivery ID format.', StatusCodes.BAD_REQUEST);
   }
 
-  public async resolveDispute(disputeId: string, action: 'refund' | 'release', adminId: string, notes?: string): Promise<{ dispute: IDispute; escrow: IEscrow }>
-  {
-    if (!mongoose.Types.ObjectId.isValid(disputeId)) {
-      throw new Error('Invalid dispute id');
-    }
-
-    const dispute = await Dispute.findById(disputeId);
-    if (!dispute) {
-      throw new Error('Dispute not found');
-    }
-
-    if (dispute.status === 'resolved') {
-      throw new Error('Dispute already resolved');
-    }
-
-    const escrow = await Escrow.findById(dispute.escrow);
-    if (!escrow) {
-      throw new Error('Associated escrow not found');
-    }
-
-    // Perform resolution: update escrow status
-    if (action === 'refund') {
-      escrow.status = 'refunded';
-    } else {
-      escrow.status = 'released';
-    }
-    escrow.locked = false;
-    await escrow.save();
-
-    // Update dispute
-    dispute.status = 'resolved';
-    dispute.resolution = action;
-    dispute.resolvedAt = new Date();
-    dispute.history.push({
-      actor: adminId ? new mongoose.Types.ObjectId(adminId) : null,
-      action: `resolved:${action}`,
-      notes: notes || null,
-      timestamp: new Date(),
-    } as any);
-    await dispute.save();
-
-    // Audit log entry
-    await AuditLog.create({
-      action: `dispute_resolved_${action}`,
-      actor: adminId ? new mongoose.Types.ObjectId(adminId) : null,
-      targetType: 'Dispute',
-      targetId: dispute._id,
-      description: `Dispute ${dispute._id} resolved with action ${action}`,
-      meta: { escrowId: escrow._id.toString(), notes: notes || null },
-    });
-
-    return { dispute, escrow };
+  const delivery = await Delivery.findById(deliveryId);
+  if (!delivery) {
+    throw new AppError('Delivery not found.', StatusCodes.NOT_FOUND);
   }
-}
 
-export default new DisputeService();
+  if (!ACTIVE_DELIVERY_STATUSES.includes(delivery.status)) {
+    throw new AppError(
+      `Disputes can only be opened for deliveries that are assigned or in progress. Current status: '${delivery.status}'.`,
+      StatusCodes.UNPROCESSABLE_ENTITY,
+    );
+  }
+
+  const isParticipant = delivery.userId === raisedBy || delivery.driverId === raisedBy;
+  if (!isParticipant) {
+    throw new AppError(
+      'Only the customer or driver associated with this delivery may open a dispute.',
+      StatusCodes.FORBIDDEN,
+    );
+  }
+
+  const existingOpenDispute = await Dispute.findOne({
+    deliveryId,
+    status: { $in: [DisputeStatus.OPEN, DisputeStatus.UNDER_REVIEW] },
+  });
+  if (existingOpenDispute) {
+    throw new AppError(
+      'An unresolved dispute already exists for this delivery.',
+      StatusCodes.CONFLICT,
+    );
+  }
+
+  let raisedAtLedger: number | undefined;
+  try {
+    raisedAtLedger = await sorobanService.getLatestLedger();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    logger.warn(`[Dispute] Failed to fetch latest Soroban ledger for audit stamp: ${message}`);
+  }
+
+  const dispute = await Dispute.create({
+    deliveryId,
+    raisedBy,
+    reason,
+    description,
+    evidenceUrls,
+    status: DisputeStatus.OPEN,
+    raisedAtLedger,
+  });
+
+  logger.info(
+    `[Dispute] User ${raisedBy} opened dispute ${dispute._id} for delivery ${deliveryId}`,
+  );
+
+  return dispute;
+};
+
+export const getDisputeById = async (id: string): Promise<IDispute> => {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new AppError('Invalid dispute ID format.', StatusCodes.BAD_REQUEST);
+  }
+
+  const dispute = await Dispute.findById(id).populate(populateOptions);
+  if (!dispute) {
+    throw new AppError('Dispute not found.', StatusCodes.NOT_FOUND);
+  }
+
+  return dispute;
+};
+
+export const getDisputes = async (filters: DisputeFilter) => {
+  const { status, raisedBy, deliveryId, reason, page = 1, limit = 10 } = filters;
+  const query: Record<string, unknown> = {};
+
+  if (status) {
+    query.status = status;
+  }
+
+  if (raisedBy) {
+    if (!mongoose.Types.ObjectId.isValid(raisedBy)) {
+      throw new AppError('Invalid raisedBy format.', StatusCodes.BAD_REQUEST);
+    }
+    query.raisedBy = raisedBy;
+  }
+
+  if (deliveryId) {
+    if (!mongoose.Types.ObjectId.isValid(deliveryId)) {
+      throw new AppError('Invalid deliveryId format.', StatusCodes.BAD_REQUEST);
+    }
+    query.deliveryId = deliveryId;
+  }
+
+  if (reason) {
+    if (!Object.values(DisputeReason).includes(reason)) {
+      throw new AppError('Invalid dispute reason.', StatusCodes.BAD_REQUEST);
+    }
+    query.reason = reason;
+  }
+
+  const skip = (page - 1) * limit;
+  const [data, total] = await Promise.all([
+    Dispute.find(query)
+      .populate(populateOptions)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .exec(),
+    Dispute.countDocuments(query).exec(),
+  ]);
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  };
+};
+
+export const resolveDispute = async (id: string, input: ResolveDisputeInput): Promise<IDispute> => {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new AppError('Invalid dispute ID format.', StatusCodes.BAD_REQUEST);
+  }
+
+  const dispute = await Dispute.findById(id);
+  if (!dispute) {
+    throw new AppError('Dispute not found.', StatusCodes.NOT_FOUND);
+  }
+
+  if (dispute.status === DisputeStatus.RESOLVED || dispute.status === DisputeStatus.REJECTED) {
+    throw new AppError(
+      `Dispute is already ${dispute.status} and cannot be resolved again.`,
+      StatusCodes.CONFLICT,
+    );
+  }
+
+  if (input.status === DisputeStatus.RESOLVED && !input.resolutionNotes) {
+    throw new AppError(
+      'resolutionNotes are required when resolving a dispute.',
+      StatusCodes.UNPROCESSABLE_ENTITY,
+    );
+  }
+
+  dispute.status = input.status;
+  dispute.resolutionNotes = input.resolutionNotes;
+  dispute.resolvedBy = input.resolvedBy;
+  dispute.resolvedAt = new Date();
+
+  await dispute.save();
+
+  logger.info(`[Dispute] Dispute ${id} updated to status '${input.status}' by ${input.resolvedBy}`);
+
+  return dispute;
+};
+
+export const addEvidence = async (id: string, input: AddEvidenceInput): Promise<IDispute> => {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new AppError('Invalid dispute ID format.', StatusCodes.BAD_REQUEST);
+  }
+
+  const dispute = await Dispute.findById(id);
+  if (!dispute) {
+    throw new AppError('Dispute not found.', StatusCodes.NOT_FOUND);
+  }
+
+  if (dispute.status === DisputeStatus.RESOLVED || dispute.status === DisputeStatus.REJECTED) {
+    throw new AppError(
+      'Evidence cannot be added to a resolved or rejected dispute.',
+      StatusCodes.CONFLICT,
+    );
+  }
+
+  const existingUrls = dispute.evidenceUrls || [];
+  const newUrls = input.evidenceUrls.filter((url) => !existingUrls.includes(url));
+  dispute.evidenceUrls = [...existingUrls, ...newUrls];
+
+  await dispute.save();
+
+  logger.info(`[Dispute] ${newUrls.length} evidence URLs added to dispute ${id}`);
+
+  return dispute;
+};
+
+export const updateDispute = async (id: string, input: UpdateDisputeInput): Promise<IDispute> => {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new AppError('Invalid dispute ID format.', StatusCodes.BAD_REQUEST);
+  }
+
+  const dispute = await Dispute.findById(id);
+  if (!dispute) {
+    throw new AppError('Dispute not found.', StatusCodes.NOT_FOUND);
+  }
+
+  if (dispute.status === DisputeStatus.RESOLVED || dispute.status === DisputeStatus.REJECTED) {
+    throw new AppError('A resolved or rejected dispute cannot be modified.', StatusCodes.CONFLICT);
+  }
+
+  if (input.reason !== undefined) {
+    dispute.reason = input.reason;
+  }
+  if (input.description !== undefined) {
+    dispute.description = input.description;
+  }
+  if (input.evidenceUrls !== undefined) {
+    dispute.evidenceUrls = input.evidenceUrls;
+  }
+
+  await dispute.save();
+
+  logger.info(`[Dispute] Dispute ${id} updated`);
+
+  return dispute;
+};
