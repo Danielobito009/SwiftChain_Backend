@@ -248,11 +248,16 @@ export class StellarService {
         `[StellarService] Submission failed — status=${response.status} ` +
           `errorResultXdr=${errXdr} payer=${payerAddress}`,
       );
-      throw new AppError(
-        `Transaction submission failed with status '${response.status}'. ` +
-          `Error result XDR: ${errXdr}`,
-        StatusCodes.BAD_GATEWAY,
-      );
+      
+      const errorMessage = `Transaction submission failed with status '${response.status}'. Error result XDR: ${errXdr}`;
+      
+      // Store in Dead Letter Queue (DLQ)
+      const { dlqService } = await import('./dlqService');
+      await dlqService.addEntry(input, errorMessage).catch((dlqErr) => {
+        logger.error(`[StellarService] Failed to save to DLQ: ${extractMessage(dlqErr)}`);
+      });
+
+      throw new AppError(errorMessage, StatusCodes.BAD_GATEWAY);
     }
 
     // Unreachable — loop always returns or throws.

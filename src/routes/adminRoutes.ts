@@ -2,6 +2,7 @@ import { Router } from 'express';
 import authenticate from '../middleware/authenticate';
 import requireRole from '../middleware/requireRole';
 import { suspendUser, getDisputes } from '../controllers/adminController';
+import { dlqController } from '../controllers/dlqController';
 import { UserRole } from '../interfaces/IUser';
 
 const router = Router();
@@ -147,5 +148,41 @@ router.get('/disputes', getDisputes);
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.put('/users/:id/suspend', suspendUser);
+
+/**
+ * @openapi
+ * /v1/admin/dlq:
+ *   get:
+ *     tags: [Admin]
+ *     summary: Fetch Dead Letter Queue (DLQ) entries
+ *     description: Admin-only. Returns a paginated list of failed transaction DLQ entries.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved DLQ entries
+ */
+router.get('/dlq', dlqController.getDlqEntries);
+
+/**
+ * @openapi
+ * /v1/admin/dlq/{id}/retry:
+ *   post:
+ *     tags: [Admin]
+ *     summary: Retry a specific DLQ entry
+ *     description: Admin-only. Retries a previously failed transaction.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Successfully retried the DLQ entry
+ */
+router.post('/dlq/:id/retry', dlqController.retryDlqEntry);
 
 export default router;
