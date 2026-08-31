@@ -4,6 +4,7 @@ import IdempotencyRecord, { IdempotencyStatus } from '../models/IdempotencyRecor
 import env from '../config/env';
 import logger from '../config/logger';
 import { AppError } from '../utils/AppError';
+import { toUTC } from '../utils/dateUtils';
 
 /** Payload stored against an idempotency key once a request completes. */
 export interface IdempotencyPayload {
@@ -80,7 +81,7 @@ export class IdempotencyService {
   // ─── MongoDB helpers ────────────────────────────────────────────────────────
 
   private expiresAt(): Date {
-    return new Date(Date.now() + this.ttlSeconds * 1000);
+    return toUTC(Date.now() + this.ttlSeconds * 1000);
   }
 
   private async getFromMongo(key: string, endpoint: string): Promise<IdempotencyPayload | null> {

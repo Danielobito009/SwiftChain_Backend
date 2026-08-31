@@ -3,6 +3,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import logger from '../config/logger';
 import { LocationUpdate } from '../models/LocationUpdate';
 import { redisClient } from '../config/redis';
+import { toUTC, nowUTC } from '../utils/dateUtils';
 import {
   DriverLocationUpdatePayload,
   LocationBroadcastPayload,
@@ -225,7 +226,7 @@ export class LocationService {
     }
 
     const capturedAt = payload.capturedAt ?? Date.now();
-    const receivedAt = new Date().toISOString();
+    const receivedAt = nowUTC().toISOString();
 
     // ── 2. Validate timestamp ────────────────────────────────────────────────
     const timestampError = this.validateTimestamp(capturedAt);
@@ -281,7 +282,7 @@ export class LocationService {
         driverId: new Types.ObjectId(driverId),
         deliveryId: new Types.ObjectId(payload.deliveryId),
         coordinates: { lat: payload.lat, lng: payload.lng },
-        capturedAt: new Date(capturedAt),
+        capturedAt: toUTC(capturedAt),
         isOfflineSync: false,
         status: 'pending',
       });
