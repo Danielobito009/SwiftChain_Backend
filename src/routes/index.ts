@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import authRoutes from './authRoutes';
+import bulkDeliveryRoutes from './bulkDeliveryRoutes';
 import deliveryCrudRoutes from './delivery.routes';
 import deliveryEtaRoutes from './deliveryRoutes';
 import deliveryStatusRoutes from './deliveries';
@@ -9,6 +10,7 @@ import fleetRoutes from './fleetRoutes';
 import disputeRoutes from './disputeRoutes';
 import eventLogRoutes from './eventLogRoutes';
 import profileRoutes from './profileRoutes';
+import notificationRoutes from './notificationRoutes';
 import healthRoutes from './healthRoutes';
 import userRoutes from './userRoutes';
 import socketMetricsRoutes from './socketMetricsRoutes';

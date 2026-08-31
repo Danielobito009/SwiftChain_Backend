@@ -16,6 +16,7 @@ export const TOKENS = {
   escrow_service: 'escrow_service', // Alternate export (escrow.service.ts)
   disputeService: 'disputeService',
   adminService: 'adminService',
+  dashboardService: 'dashboardService',
   eventLogService: 'eventLogService',
   profilePictureService: 'profilePictureService',
   storageService: 'storageService',
@@ -63,6 +64,7 @@ export const TOKENS = {
   escrow_controller: 'escrow_controller', // Alternate export (escrow.controller.ts)
   disputeController: 'disputeController',
   adminController: 'adminController',
+  dashboardController: 'dashboardController',
   eventLogController: 'eventLogController',
   profileController: 'profileController',
   uploadController: 'uploadController',
