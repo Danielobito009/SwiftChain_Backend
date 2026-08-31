@@ -2,7 +2,7 @@ import httpStatus from 'http-status-codes';
 import { Types } from 'mongoose';
 import logger from '../config/logger';
 import { AppError } from '../utils/AppError';
-import { DeliveryStatus, IDelivery } from '../models/Delivery';
+import { Delivery, DeliveryStatus, IDelivery } from '../models/Delivery';
 import {
   IDeviceToken,
   INotificationPreference,
@@ -61,6 +61,20 @@ const EVENT_COPY: Record<NotificationEvent, { title: string; body: (ref: string)
   },
 };
 
+/** Payload of a `delivery_status_updated` Soroban event. */
+export interface DeliveryStatusUpdatedEvent {
+  deliveryId: string;
+  status: string;
+  transactionHash?: string;
+}
+
+/** Callback invoked when a delivery status update should be broadcast over WebSocket. */
+export type DeliveryWebSocketNotifier = (
+  delivery: IDelivery,
+  status: DeliveryStatus,
+  transactionHash?: string,
+) => void;
+
 /** Input accepted by {@link NotificationService.registerDevice}. */
 export interface RegisterDeviceInput {
   userId: string;
@@ -90,6 +104,7 @@ export class NotificationService {
     private readonly preferenceRepository: NotificationPreferenceRepository = defaultPreferenceRepository,
     private readonly notificationRepository: NotificationRepository = defaultNotificationRepository,
     private readonly pushProvider: IPushProvider = fcmProvider,
+    private readonly websocketNotifier: DeliveryWebSocketNotifier = () => undefined,
   ) {}
 
   /**
@@ -140,6 +155,65 @@ export class NotificationService {
     );
 
     return results.filter((record): record is INotification => record !== null);
+  }
+
+  /**
+   * Handle a `delivery_status_updated` event emitted by the smart contract.
+   *
+   * Applies the on-chain status to the stored delivery and triggers the
+   * related user notifications (push and WebSocket).
+   */
+  async handleDeliveryStatusUpdated(event: DeliveryStatusUpdatedEvent): Promise<{
+    delivery: IDelivery;
+    notifications: INotification[];
+  }> {
+    if (!Types.ObjectId.isValid(event.deliveryId)) {
+      throw new AppError('Invalid delivery ID', httpStatus.BAD_REQUEST);
+    }
+
+    const normalizedStatus = Object.values(DeliveryStatus).find(
+      (value) => value === event.status,
+    );
+    if (!normalizedStatus) {
+      throw new AppError(
+        `Unknown delivery status '${event.status}'`,
+        httpStatus.BAD_REQUEST,
+      );
+    }
+
+    const updated = await Delivery.findByIdAndUpdate(
+      event.deliveryId,
+      { $set: { status: normalizedStatus } },
+      { new: true, runValidators: true },
+    ).exec();
+
+    if (!updated) {
+      throw new AppError(`Delivery ${event.deliveryId} not found`, httpStatus.NOT_FOUND);
+    }
+
+    this.emitWebSocketNotification(updated, normalizedStatus, event.transactionHash);
+    const notifications = await this.notifyDeliveryTransition(updated, normalizedStatus);
+
+    return { delivery: updated, notifications };
+  }
+
+  /**
+   * Best-effort WebSocket broadcast; failures are logged and swallowed so the
+   * surrounding delivery transition is not rolled back.
+   */
+  private emitWebSocketNotification(
+    delivery: IDelivery,
+    status: DeliveryStatus,
+    transactionHash?: string,
+  ): void {
+    try {
+      this.websocketNotifier(delivery, status, transactionHash);
+    } catch (error) {
+      logger.error(
+        `[NotificationService] WebSocket notification failed for delivery=${String(delivery._id)}: ` +
+          (error instanceof Error ? error.message : 'Unknown error'),
+      );
+    }
   }
 
   /**
