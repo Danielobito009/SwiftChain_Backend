@@ -7,13 +7,14 @@ import {
   LocationSyncAck,
   SyncItemResult,
 } from './socket.types';
+import env from '../config/env';
 
 /**
  * Maximum number of location points accepted in a single sync batch.
  * Protects against abusive or runaway clients.
  * Overridable via SYNC_BATCH_SIZE_LIMIT env var.
  */
-const BATCH_SIZE_LIMIT = parseInt(process.env.SYNC_BATCH_SIZE_LIMIT ?? '500', 10);
+const BATCH_SIZE_LIMIT = env.SYNC_BATCH_SIZE_LIMIT;
 
 /**
  * SyncService handles the business logic for offline catch-up sync:

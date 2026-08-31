@@ -1,10 +1,11 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import { Delivery } from './models/Delivery';
+import env from './config/env';
 
 dotenv.config();
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/swiftchain';
+const MONGODB_URI = env.MONGODB_URI;
 
 const seedDeliveries = async (): Promise<void> => {
   try {

@@ -15,6 +15,7 @@ import {
   AuthRefreshPayload,
   AuthRefreshAckPayload,
 } from './socket.types';
+import env from '../config/env';
 
 /**
  * Typed Socket.IO server alias.
@@ -141,8 +142,8 @@ function setupTokenExpirationCheck(io: TypedServer, socket: TypedSocket): void {
     return;
   }
 
-  const CHECK_INTERVAL_MS = parseInt(process.env.SOCKET_TOKEN_CHECK_INTERVAL_MS ?? '60000', 10);
-  const GRACE_PERIOD_MS = parseInt(process.env.SOCKET_TOKEN_GRACE_PERIOD_MS ?? '30000', 10);
+  const CHECK_INTERVAL_MS = env.SOCKET_TOKEN_CHECK_INTERVAL_MS;
+  const GRACE_PERIOD_MS = env.SOCKET_TOKEN_GRACE_PERIOD_MS;
 
   let graceTimer: NodeJS.Timeout | null = null;
   let checkInterval: NodeJS.Timeout | null = null;
