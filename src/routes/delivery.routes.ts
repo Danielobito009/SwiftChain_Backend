@@ -327,4 +327,64 @@ router.patch(
   deliveryController.restore.bind(deliveryController)
 );
 
+/**
+ * @openapi
+ * /v1/deliveries/{id}/qrcode:
+ *   get:
+ *     tags: [Deliveries]
+ *     summary: Generate QR code for delivery handoff verification
+ *     description: |
+ *       Generates a secure QR code for delivery handoff verification.
+ *       QR encodes a delivery ID and a time-limited HMAC-signed token.
+ *
+ *       The QR code is only generated if the delivery is in the IN_PROGRESS status.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: MongoDB ObjectId of the delivery
+ *     responses:
+ *       200:
+ *         description: QR code generated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     deliveryId:
+ *                       type: string
+ *                     qrCode:
+ *                       type: string
+ *                       description: Base64-encoded PNG data URL
+ *                     expiresAt:
+ *                       type: string
+ *                       format: date-time
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Invalid delivery ID or delivery not eligible for handoff
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.get(
+  '/:id/qrcode',
+  authenticate,
+  deliveryController.generateHandoffQrCode.bind(deliveryController),
+);
+
 export default router;

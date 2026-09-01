@@ -174,6 +174,38 @@ export class DeliveryController {
       next(error);
     }
   }
+
+  /**
+   * GET /api/v1/deliveries/:id/qrcode
+   *
+   * Generates a QR code for secure delivery handoff verification.
+   * QR encodes delivery ID and a time-limited HMAC-signed token.
+   *
+   * @requires Authentication — only authorized parties can generate
+   * @param id - Delivery MongoDB document ID
+   * @returns JSON with base64 QR code image and expiry
+   */
+  async generateHandoffQrCode(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+
+      const result = await deliveryService.generateHandoffQrCode(id);
+
+      sendSuccess(
+        res,
+        {
+          deliveryId: result.deliveryId,
+          qrCode: result.qrCode, // base64 PNG data URL
+          expiresAt: result.expiresAt,
+          // token NOT returned in response (security)
+        },
+        'QR code generated successfully',
+        httpStatus.OK,
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const deliveryController = new DeliveryController();
