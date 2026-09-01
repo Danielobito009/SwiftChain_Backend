@@ -14,9 +14,8 @@ import notificationRoutes from './notificationRoutes';
 import healthRoutes from './healthRoutes';
 import userRoutes from './userRoutes';
 import socketMetricsRoutes from './socketMetricsRoutes';
-import bulkDeliveryRoutes from './bulkDeliveryRoutes';
-import notificationRoutes from './notificationRoutes';
 import stellarRoutes from './stellar.routes';
+import webhookRoutes from './webhookRoutes';
 
 const router = Router();
 
@@ -38,5 +37,6 @@ router.use('/v1/health', healthRoutes);
 router.use('/v1/socket-metrics', socketMetricsRoutes);
 router.use('/v1/users', userRoutes);
 router.use('/v1/stellar', stellarRoutes);
+router.use('/v1/webhooks', webhookRoutes);
 
 export default router;
