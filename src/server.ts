@@ -9,6 +9,8 @@ import {
   TypedServer,
 } from './sockets/connectionHandler';
 import { startEscrowMonitorJob, stopEscrowMonitorJob } from './jobs/escrowMonitor';
+import { startWebhookRetryJob, stopWebhookRetryJob } from './jobs/webhookRetryJob';
+import { startAutoAssignmentJob, stopAutoAssignmentJob } from './jobs/autoAssignmentJob';
 import { startEventPoller, stopEventPoller } from './services/eventPoller';
 import { initializeRedis, disconnectRedis } from './config/redis';
 import env from './config/env';
@@ -52,6 +54,8 @@ httpServer.listen(PORT, () => {
 
 if (env.NODE_ENV !== 'test') {
   startEscrowMonitorJob();
+  startWebhookRetryJob();
+  startAutoAssignmentJob();
   startEventPoller();
 }
 
@@ -59,7 +63,9 @@ const gracefulShutdown = (): void => {
   logger.info('Shutting down gracefully...');
   stopEventPoller();
   stopEscrowMonitorJob();
-  
+  stopWebhookRetryJob();
+  stopAutoAssignmentJob();
+
   // Disconnect Redis
   disconnectRedis()
     .catch((error) => logger.error('Error disconnecting Redis:', error));

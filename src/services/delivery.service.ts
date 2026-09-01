@@ -6,6 +6,8 @@ import { AppError } from '../utils/AppError';
 import logger from '../config/logger';
 import { deliveryRepository } from '../repositories/DeliveryRepository';
 import { notificationService } from './notificationService';
+import { webhookService } from './webhookService';
+import { proofOfDeliveryService } from './proofOfDeliveryService';
 
 export interface CreateDeliveryInput {
   trackingNumber: string;
@@ -254,6 +256,12 @@ export class DeliveryService {
       );
     }
 
+    if (nextStatus === DeliveryStatus.COMPLETED) {
+      // Proof of delivery must be on record before a delivery can be marked
+      // completed — this is what ultimately unblocks its escrow release.
+      await proofOfDeliveryService.assertProofOfDeliveryExists(id);
+    }
+
     const updated = await deliveryRepository.transitionStatus(id, current.status, nextStatus);
 
     if (!updated) {
@@ -270,9 +278,10 @@ export class DeliveryService {
         `${current.status} -> ${nextStatus}`,
     );
 
-    // Fire-and-forget by design: notification failures are recorded inside the
-    // notification service and must not roll back a committed transition.
+    // Fire-and-forget by design: notification/webhook failures are recorded
+    // inside their own services and must not roll back a committed transition.
     await notificationService.notifyDeliveryTransition(updated, nextStatus);
+    await webhookService.dispatchDeliveryEvent(updated, nextStatus);
 
     return updated;
   }

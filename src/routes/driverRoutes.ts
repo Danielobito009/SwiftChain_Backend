@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { driverController } from '../controllers/driverController';
 import { driverLocationController } from '../controllers/driverLocationController';
+import { getDriverEarnings } from '../controllers/driverEarningsController';
 import authenticate from '../middleware/authenticate';
 import requireRole from '../middleware/requireRole';
 import { UserRole } from '../interfaces/IUser';
@@ -71,5 +72,12 @@ router.get(
   authenticate,
   driverLocationController.getDriverLocation.bind(driverLocationController),
 );
+
+/**
+ * @route  GET /api/v1/drivers/:id/earnings
+ * @desc   Aggregate a driver's earnings by day/week/month from released escrows
+ * @access The driver themselves, or an admin
+ */
+router.get('/:id/earnings', authenticate, getDriverEarnings);
 
 export default router;

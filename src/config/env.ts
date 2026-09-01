@@ -152,6 +152,30 @@ interface EnvConfig {
   CB_SOROBAN_VOLUME_THRESHOLD: number;
   /** Per-call timeout (ms) enforced by the breaker. Default: 10000 */
   CB_SOROBAN_TIMEOUT_MS: number;
+
+  // ── Merchant webhooks ───────────────────────────────────────────
+  /** Per-request timeout (ms) for a webhook POST. Default: 10000 */
+  WEBHOOK_REQUEST_TIMEOUT_MS: number;
+  /** Maximum delivery attempts (including the first) before an attempt is exhausted. Default: 5 */
+  WEBHOOK_MAX_RETRIES: number;
+  /** Base delay (ms) for webhook retry exponential backoff. Default: 30000 */
+  WEBHOOK_RETRY_BASE_MS: number;
+  /** Maximum delay (ms) cap for webhook retry exponential backoff. Default: 3600000 */
+  WEBHOOK_RETRY_MAX_MS: number;
+  /** Cron expression driving the webhook retry sweep. Default: every minute */
+  WEBHOOK_RETRY_CRON: string;
+  /** Maximum due attempts processed per retry sweep tick. Default: 50 */
+  WEBHOOK_RETRY_BATCH_SIZE: number;
+
+  // ── Driver assignment ────────────────────────────────────────────
+  /** Number of times the search radius doubles before giving up. Default: 3 */
+  ASSIGNMENT_RADIUS_EXPANSION_STEPS: number;
+  /** Cron expression driving the auto-assignment sweep for unassigned funded deliveries. Default: every minute */
+  AUTO_ASSIGNMENT_CRON: string;
+
+  // ── Proof of delivery ────────────────────────────────────────────
+  /** Maximum accepted proof-of-delivery image size, in MB. Default: 8 */
+  PROOF_OF_DELIVERY_MAX_SIZE_MB: number;
 }
 
 const envSchema = z.object({
@@ -261,6 +285,21 @@ const envSchema = z.object({
   CB_SOROBAN_RESET_TIMEOUT_MS: z.coerce.number().int().min(1000).default(30000),
   CB_SOROBAN_VOLUME_THRESHOLD: z.coerce.number().int().min(1).default(5),
   CB_SOROBAN_TIMEOUT_MS: z.coerce.number().int().min(1000).default(10000),
+
+  // ── Merchant webhooks ───────────────────────────────────────────
+  WEBHOOK_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).default(10000),
+  WEBHOOK_MAX_RETRIES: z.coerce.number().int().min(1).max(20).default(5),
+  WEBHOOK_RETRY_BASE_MS: z.coerce.number().int().min(1000).default(30000),
+  WEBHOOK_RETRY_MAX_MS: z.coerce.number().int().min(1000).default(3600000),
+  WEBHOOK_RETRY_CRON: z.string().trim().min(1).default('* * * * *'),
+  WEBHOOK_RETRY_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(50),
+
+  // ── Driver assignment ────────────────────────────────────────────
+  ASSIGNMENT_RADIUS_EXPANSION_STEPS: z.coerce.number().int().min(0).max(10).default(3),
+  AUTO_ASSIGNMENT_CRON: z.string().trim().min(1).default('* * * * *'),
+
+  // ── Proof of delivery ────────────────────────────────────────────
+  PROOF_OF_DELIVERY_MAX_SIZE_MB: z.coerce.number().int().min(1).default(8),
 });
 
 let env: EnvConfig;
@@ -293,6 +332,11 @@ if (env.DRIVER_PROXIMITY_DEFAULT_RADIUS_M > env.DRIVER_PROXIMITY_MAX_RADIUS_M) {
 
 if (env.SOROBAN_RPC_RETRY_BASE_MS > env.SOROBAN_RPC_RETRY_MAX_MS) {
   console.error('❌ SOROBAN_RPC_RETRY_BASE_MS cannot exceed SOROBAN_RPC_RETRY_MAX_MS');
+  process.exit(1);
+}
+
+if (env.WEBHOOK_RETRY_BASE_MS > env.WEBHOOK_RETRY_MAX_MS) {
+  console.error('❌ WEBHOOK_RETRY_BASE_MS cannot exceed WEBHOOK_RETRY_MAX_MS');
   process.exit(1);
 }
 

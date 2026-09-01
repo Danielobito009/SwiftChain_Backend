@@ -5,6 +5,7 @@ import Delivery, { DeliveryStatus } from '../models/Delivery';
 import { AppError } from '../utils/AppError';
 import logger from '../config/logger';
 import { withLock } from '../config/redis';
+import { proofOfDeliveryService } from './proofOfDeliveryService';
 
 /** Data extracted from an on-chain `escrow_funded` contract event. */
 export interface EscrowFundedInput {
@@ -170,6 +171,11 @@ export class EscrowService {
       if (!escrow) {
         throw new AppError('Escrow not found', httpStatus.NOT_FOUND);
       }
+
+      // Proof of delivery must be on record before funds can be released —
+      // this is the enforcement point regardless of which path (API call,
+      // indexer event) triggers a release.
+      await proofOfDeliveryService.assertProofOfDeliveryExists(String(escrow.delivery));
 
       // Check if the escrow is already released
       if (escrow.lockStatus === EscrowLockStatus.RELEASED) {
