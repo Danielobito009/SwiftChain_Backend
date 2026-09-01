@@ -19,6 +19,7 @@ import webhookRoutes from './webhookRoutes';
 import assignmentRoutes from './assignmentRoutes';
 import proofOfDeliveryRoutes from './proofOfDeliveryRoutes';
 import escrowRoutes from './escrow.routes';
+import escrowIndexerRoutes from './escrowIndexer.routes';
 
 const router = Router();
 
@@ -44,5 +45,6 @@ router.use('/v1/users', userRoutes);
 router.use('/v1/stellar', stellarRoutes);
 router.use('/v1/webhooks', webhookRoutes);
 router.use('/v1/escrow', escrowRoutes);
+router.use('/v1/indexer', escrowIndexerRoutes);
 
 export default router;
