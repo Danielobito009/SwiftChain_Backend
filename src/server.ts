@@ -10,6 +10,7 @@ import {
 } from './sockets/connectionHandler';
 import { startEscrowMonitorJob, stopEscrowMonitorJob } from './jobs/escrowMonitor';
 import { startWebhookRetryJob, stopWebhookRetryJob } from './jobs/webhookRetryJob';
+import { startAutoAssignmentJob, stopAutoAssignmentJob } from './jobs/autoAssignmentJob';
 import { startEventPoller, stopEventPoller } from './services/eventPoller';
 import { initializeRedis, disconnectRedis } from './config/redis';
 import env from './config/env';
@@ -54,6 +55,7 @@ httpServer.listen(PORT, () => {
 if (env.NODE_ENV !== 'test') {
   startEscrowMonitorJob();
   startWebhookRetryJob();
+  startAutoAssignmentJob();
   startEventPoller();
 }
 
@@ -62,6 +64,7 @@ const gracefulShutdown = (): void => {
   stopEventPoller();
   stopEscrowMonitorJob();
   stopWebhookRetryJob();
+  stopAutoAssignmentJob();
 
   // Disconnect Redis
   disconnectRedis()

@@ -16,6 +16,7 @@ import userRoutes from './userRoutes';
 import socketMetricsRoutes from './socketMetricsRoutes';
 import stellarRoutes from './stellar.routes';
 import webhookRoutes from './webhookRoutes';
+import assignmentRoutes from './assignmentRoutes';
 
 const router = Router();
 
@@ -26,6 +27,7 @@ router.use('/v1/deliveries', bulkDeliveryRoutes);
 router.use('/v1/deliveries', deliveryCrudRoutes);
 router.use('/v1/deliveries', deliveryEtaRoutes);
 router.use('/v1/deliveries', deliveryStatusRoutes);
+router.use('/v1/deliveries', assignmentRoutes);
 router.use('/v1/admin', adminRoutes);
 router.use('/v1/drivers', driverRoutes);
 router.use('/v1/fleets', fleetRoutes);
