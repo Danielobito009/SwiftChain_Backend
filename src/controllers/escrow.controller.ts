@@ -33,6 +33,32 @@ export class EscrowController {
     }
   }
 
+  async fund(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { deliveryId, contractId, transactionHash, amount, asset, fundedBy, ledger } =
+        req.body;
+
+      logger.info(
+        `[EscrowController] Fund request received — delivery=${deliveryId} ` +
+          `contract=${contractId} tx=${transactionHash}`,
+      );
+
+      const escrow = await escrowService.recordEscrowFunded({
+        contractId,
+        deliveryId,
+        amount,
+        asset,
+        fundedBy,
+        transactionHash,
+        ledger,
+      });
+
+      sendSuccess(res, { escrow }, 'Escrow funded successfully', httpStatus.CREATED);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async sync(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const startLedger = Number(req.body.startLedger);
