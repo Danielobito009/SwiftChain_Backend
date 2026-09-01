@@ -144,6 +144,46 @@ The backend serves as the central hub connecting the frontend, database, and blo
 
 ---
 
+## 📄 Pagination, Sorting & Filtering
+
+Collection endpoints can share a standardized query interface via the
+`buildQueryOptions` middleware in `src/middlewares/queryMiddleware.ts`, which
+parses and validates the query string once and hands the service layer a
+ready-to-use Mongoose filter, sort and page window.
+
+| Parameter | Description | Example |
+| --------- | ----------- | ------- |
+| `page` | 1-based page number | `?page=2` |
+| `limit` | Items per page, clamped to the route maximum | `?limit=50` |
+| `sort` | Comma-separated fields, `-` prefix for descending | `?sort=-createdAt,name` |
+| `search` | Case-insensitive search across searchable fields | `?search=lagos` |
+
+Filters accept direct equality or the comparison operators `eq`, `ne`, `gt`,
+`gte`, `lt`, `lte`, `in` and `nin` in bracket notation:
+
+```bash
+GET /api/v1/deliveries?status=pending&amount[gte]=100&sort=-amount&page=1&limit=20
+```
+
+Each route declares the fields it exposes, so only whitelisted fields can be
+filtered or sorted on. `buildPaginationMeta` produces the accompanying
+metadata:
+
+```json
+{
+  "totalItems": 137,
+  "totalPages": 7,
+  "currentPage": 1,
+  "limit": 20,
+  "hasNextPage": true,
+  "hasPreviousPage": false,
+  "nextPage": 2,
+  "previousPage": null
+}
+```
+
+---
+
 ## 🗺 Development Roadmap
 
 ### Phase 1 — MVP (Minimal Logistics Backend)
