@@ -7,6 +7,7 @@ import logger from '../config/logger';
 import { deliveryRepository } from '../repositories/DeliveryRepository';
 import { notificationService } from './notificationService';
 import { webhookService } from './webhookService';
+import { proofOfDeliveryService } from './proofOfDeliveryService';
 
 export interface CreateDeliveryInput {
   trackingNumber: string;
@@ -253,6 +254,12 @@ export class DeliveryService {
             : ' This is a terminal state.'),
         httpStatus.BAD_REQUEST,
       );
+    }
+
+    if (nextStatus === DeliveryStatus.COMPLETED) {
+      // Proof of delivery must be on record before a delivery can be marked
+      // completed — this is what ultimately unblocks its escrow release.
+      await proofOfDeliveryService.assertProofOfDeliveryExists(id);
     }
 
     const updated = await deliveryRepository.transitionStatus(id, current.status, nextStatus);
